@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Install toolchain and GTK stack
         run: |
-          pacman -Syu --noconfirm --needed rust rust-src clippy rustfmt gcc pkgconf git \
+          pacman -Syu --noconfirm --needed rust gcc pkgconf git \
             gtk4 libadwaita gtk4-layer-shell cairo pango gdk-pixbuf2
       - uses: actions/checkout@v4
       - name: Cache cargo
