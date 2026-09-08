@@ -1,68 +1,79 @@
 # Omashot
 
-Screenshot capture and annotation for [Omarchy](https://omarchy.org). A bar widget and shell service wrap a native Rust + GTK4 app that does the actual work: a frozen-screen region picker, a full annotation editor, Quick Access cards, capture history, OCR, and an MCP server so AI agents can take and mark up screenshots too.
+Screenshot capture and annotation for [Omarchy](https://omarchy.org). A bar widget and shell service wrap a native Rust + GTK4 app: a frozen-screen region picker, a full annotation editor, Quick Access cards, capture history, OCR, and an MCP server so AI agents can take, mark up, and configure screenshots too. Everything follows your Omarchy theme.
 
-![Omashot editor](preview.png)
+![Omashot editor](docs/screenshots/editor.png)
 
-## What you get
+## Highlights
 
-- **Capture**: area, window, and fullscreen through `grim`. The overlay freezes the screen, shows a magnifier and size readout, highlights windows (`A` toggles window mode), constrains to squares with Shift, nudges with the arrow keys, and reuses the last region with Enter.
-- **Annotate**: select, crop (aspect presets, edge snapping, auto-crop), rectangle, filled rectangle, oval, arrow (straight or curved; classic, tapered, or outlined), line, text (plain, label, callout), highlighter that snaps to OCR text lines, blur (pixelate, gaussian, hexagonal, crystallize, pointillism, halftone, tape, washi), spotlight, counters, watermark, pencil. Undo and redo, copy, paste, duplicate, zoom and pan, canvas backgrounds with padding, rounded corners, and shadow.
-- **Auto-redact**: one click pixelates emails, phone numbers, URLs, card numbers, API tokens, and `key=value` credentials found by local OCR.
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/picker.png" alt="Region picker"></td>
+<td><b>Picker.</b> The screen freezes; drag a region with a magnifier and size readout, press <code>A</code> to pick windows, Shift for a square, arrow keys to nudge, Enter to reuse the last region.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/quick-access.png" alt="Quick Access card" width="360"></td>
+<td><b>Quick Access.</b> After every capture a small card slides into the corner: copy, edit, open, delete, or drag the file straight into another app. <code>c</code> <code>e</code> <code>o</code> <code>Delete</code> work while hovering.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/bar-panel.png" alt="Bar panel" width="420"></td>
+<td><b>Bar widget.</b> Left click captures, middle click captures and annotates, right click opens this panel with every mode. Fully keyboard navigable, and reachable from scripts through <code>omarchy-shell omashot &lt;mode&gt;</code>.</td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/preferences.png" alt="Preferences"></td>
+<td><b>Preferences.</b> Save folder, filename pattern, formats, the after-capture matrix, Quick Access, editor defaults, history retention, OCR languages, and the Hyprland bindings to copy. Every setting is also a line in <code>config.toml</code>.</td>
+</tr>
+</table>
+
+### Editor tools
+
+Select, crop (aspect presets, edge snapping, auto-crop), rectangle, filled rectangle, oval, arrow (straight or curved; classic, tapered, or outlined; per-end heads), line, text (plain, label, callout), highlighter that snaps to OCR text lines, blur (pixelate, gaussian, hexagonal, crystallize, pointillism, halftone, tape, washi), spotlight, counters, watermark, pencil. Undo and redo, copy, paste, duplicate, zoom and pan, canvas backgrounds with padding, corner radius, and shadow.
+
+- **Auto-redact** pixelates emails, phone numbers, URLs, card numbers, API tokens, and `key=value` credentials found by local OCR.
 - **Editable sessions**: every save keeps the original pixels and annotations, so a saved screenshot reopens with everything still editable.
-- **Quick Access**: a floating card after every capture with copy, edit, drag-to-app, open, and delete.
-- **History** browser, **OCR** to clipboard, and a Preferences window backed by `~/.config/omashot/config.toml`.
-- **MCP server** for agents: `omashot mcp`.
-- **Follows your Omarchy theme**: colors from the active theme's `colors.toml`, square corners like the shell, the system monospace font, and a swatch palette built from the theme's accent colors. Theme switches apply live.
+- **Theme aware**: colors come from the active Omarchy theme, corners are square like the shell, the font is the system monospace, and the swatch palette is built from the theme. Theme switches apply instantly.
 
 ## Install
 
 The plugin is QML that runs inside `omarchy-shell`; the capture and editor logic is a native binary built from the same repository. Both steps are needed.
 
 ```sh
-# 1. Shell plugin (bar widget + service), lands disabled until you enable it
+# 1. Shell plugin (bar widget + service)
 omarchy plugin add https://github.com/diyahir/omashot.git --enable
 
-# 2. Native binary (Rust toolchain required: `sudo pacman -S rustup && rustup default stable`)
+# 2. Native binary (needs a Rust toolchain: `sudo pacman -S rustup && rustup default stable`)
 sudo pacman -S --needed gtk4 libadwaita gtk4-layer-shell grim wl-clipboard tesseract tesseract-data-eng
 cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omashot
+omarchy-shell omashot recheck
 ```
 
-`cargo install` puts `omashot` in `~/.cargo/bin`, which Omarchy already has on `PATH`. Restart the shell or run `omarchy-shell omashot recheck` so the service notices the binary.
-
-The bar widget appears in the right section. Move it with:
-
-```sh
-omarchy bar move io.github.diyaclanker.omashot --section center
-```
+`cargo install` puts `omashot` in `~/.cargo/bin`, which Omarchy already has on `PATH`. The widget appears in the bar's right section; move it with `omarchy bar move io.github.diyaclanker.omashot --section center`.
 
 ## Use
 
 | Where | What |
 | --- | --- |
-| Bar icon, left click | Capture an area (change with the widget's `clickMode` setting: `area`, `window`, `full`, `annotate`, `ocr`) |
-| Bar icon, middle click | Capture an area and open the editor |
-| Bar icon, right click | Panel with every capture action, keyboard navigable |
-| `omarchy-shell omashot area` | Trigger through the shell service; also `window`, `full`, `annotate`, `ocr`, `history`, `settings`, and `edit <path>` |
-| `omashot area` | Run the binary directly (same subcommands, plus `annotate FILE`, `daemon`, `mcp`) |
-| `omashot FILE` | Open a file in the editor, so `OMARCHY_SCREENSHOT_EDITOR=omashot` makes Omarchy's own screenshot notification open Omashot |
+| Bar icon | Left click: capture (mode from the widget's `clickMode` setting). Middle click: capture and annotate. Right click: panel |
+| `omarchy-shell omashot area` | Through the shell service; also `window`, `full`, `annotate`, `ocr`, `history`, `settings`, `edit <path>`, `status` |
+| `omashot area` | The binary directly; same verbs plus `annotate FILE`, `daemon`, `mcp`, and `--wait` for a JSON result |
+| `omashot FILE` | Opens a file in the editor, so `OMARCHY_SCREENSHOT_EDITOR=omashot` routes Omarchy's own screenshot notification into Omashot |
 
 ### Keybindings
 
-Omarchy owns global shortcuts. To make Print use Omashot, add to `~/.config/hypr/bindings.lua`:
+Omarchy owns global shortcuts. Add to `~/.config/hypr/bindings.lua`:
 
 ```lua
+o.bind("SUPER + I", "Screenshot", "omarchy-shell omashot area")
+o.bind("SUPER + SHIFT + I", "Screenshot and annotate", "omarchy-shell omashot annotate")
+
+-- Or take over Print:
 hl.unbind("PRINT")
 o.bind("PRINT", "Screenshot", "omarchy-shell omashot area")
-o.bind("SHIFT + PRINT", "Screenshot window", "omarchy-shell omashot window")
-o.bind("CTRL + PRINT", "Screenshot and annotate", "omarchy-shell omashot annotate")
-hl.unbind("SUPER + CTRL + PRINT")
-o.bind("SUPER + CTRL + PRINT", "Extract text (OCR)", "omarchy-shell omashot ocr")
 ```
 
 ### Omarchy menu
 
-To list Omashot under Capture in the Omarchy menu, add to `~/.config/omarchy/extensions/omarchy-menu.jsonc`:
+Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` to list it under Capture:
 
 ```jsonc
 "trigger.capture.omashot": {"icon":"󰄀","label":"Omashot","action":"omarchy-shell omashot area"},
@@ -82,19 +93,73 @@ To list Omashot under Capture in the Omarchy menu, add to `~/.config/omarchy/ext
 | Shift while drawing | Square, circle, or 45° constraint |
 | `Ctrl+B` | Toggle the canvas and background sidebar |
 
-### Configuration
+## Configuration
 
-Preferences (`omashot settings`) edit `~/.config/omashot/config.toml`: save folder (defaults to `OMARCHY_SCREENSHOT_DIR` or `~/Pictures/Screenshots`), filename pattern, format and quality, the per-mode after-capture matrix (save, copy, Quick Access, editor), Quick Access placement and timing, editor defaults, history retention, and OCR languages (defaults to `OMARCHY_OCR_LANGS`).
+Everything lives in `~/.config/omashot/config.toml`. Edit it by hand, through Preferences (`omashot settings`), or with the MCP `set_config` tool; the running app picks up changes immediately. Missing keys fall back to defaults. The full file with defaults:
 
-Widget settings live in `~/.config/omarchy/shell.json` under the bar layout entry: `clickMode` and `showDaemon`.
+```toml
+[general]
+save_folder = "~/Pictures/Screenshots"   # or $OMARCHY_SCREENSHOT_DIR when set
+filename_pattern = "Screenshot %Y-%m-%d at %H.%M.%S"
+format = "png"                            # png | jpg | webp
+quality = 90
+include_cursor = false
+sound = true
+notifications = true                      # shown when Quick Access is off
+remember_last_area = true
+delay_ms = 0
+
+[post_capture.fullscreen]                 # same keys for .area, .window, .annotate_export
+save = true
+copy = true
+quick_access = true
+annotate = false
+
+[quick_access]
+enabled = true
+corner = "bottom-right"                   # top-left | top-right | bottom-left | bottom-right
+auto_dismiss_secs = 8                     # 0 keeps cards until dismissed
+max_cards = 4
+thumbnail_width = 240
+keep_editing_after_drag = false
+
+[annotate]
+stroke_color = "#ff3b30"                  # the theme red is used while this is the stock default
+fill_color = "#ff3b3080"
+text_color = "#ff3b30"
+stroke_width = 4.0
+font_family = "Sans"
+font_size = 28.0
+blur_style = "pixelate"                   # pixelate | gaussian
+blur_strength = 12.0
+corner_radius = 8.0
+auto_crop = true
+auto_redact = false
+watermark_text = ""
+
+[history]
+enabled = true
+retention_days = 30                       # 0 keeps forever; files on disk are never deleted
+max_entries = 500
+
+[ocr]
+languages = "eng"                         # or $OMARCHY_OCR_LANGS, e.g. "eng+deu"
+copy_to_clipboard = true
+```
+
+Widget settings (`clickMode`, `showDaemon`) live in `~/.config/omarchy/shell.json` under the bar layout entry.
 
 ## MCP server for agents
 
-`omashot mcp` speaks the Model Context Protocol over stdio and needs no display of its own. Register it in Claude Code (this repo ships a `.mcp.json`) or any MCP client:
+`omashot mcp` speaks the Model Context Protocol over stdio and needs no display of its own. Register it in Claude Code (the repo ships a `.mcp.json`) or any MCP client:
 
 ```json
 { "mcpServers": { "omashot": { "command": "omashot", "args": ["mcp"] } } }
 ```
+
+<img src="docs/screenshots/mcp-annotate.png" alt="Result of the MCP annotate tool" width="760">
+
+The image above was produced entirely by an agent: one `capture_window` call, then one `annotate` call with a rectangle, counters, a blur over the folder path, a highlight, a tapered arrow, a callout, a diagonal watermark, and a gradient canvas.
 
 | Tool | What it does |
 | --- | --- |
@@ -102,10 +167,11 @@ Widget settings live in `~/.config/omarchy/shell.json` under the bar layout entr
 | `capture_screen`, `capture_area`, `capture_window` | Grab pixels headlessly; returns the saved path plus a downscaled image |
 | `capture_interactive` | Ask the human to pick a region or window; blocks until they finish |
 | `ocr` | Text or word boxes from a file or screen area |
-| `annotate` | Draw rectangles, arrows, labels, callouts, blur, highlights, counters, spotlight, watermark, or pencil paths onto an image, with optional crop and canvas background |
-| `redact` | OCR the image and pixelate emails, phones, URLs, card numbers, tokens, and credentials, plus any extra regex you pass |
+| `annotate` | Every editor tool from JSON: rectangles, ovals, lines, arrows, text, labels, callouts, highlights, blur, spotlight, counters, watermark, pencil, crop, and canvas backgrounds |
+| `redact` | OCR the image and pixelate emails, phones, URLs, card numbers, tokens, credentials, plus any extra regex |
 | `describe_annotations` | Field reference for every annotation type |
-| `history_list`, `read_image`, `open_editor` | Browse recent captures, look at a file, or hand an image to the human in the editor |
+| `get_config`, `set_config` | Read the configuration or change any setting; invalid values are rejected |
+| `history_list`, `read_image`, `open_editor` | Browse recent captures, look at a file, or hand an image to the human |
 
 `annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed.
 
@@ -120,18 +186,18 @@ Captures, history (`~/.local/share/omashot`), and config (`~/.config/omashot`) a
 
 ## Dependencies and license
 
-Runtime: `gtk4`, `libadwaita`, `gtk4-layer-shell`, `grim`, `wl-clipboard`; optional `tesseract` with a language pack for OCR, highlighter snapping, and auto-redact, `canberra-gtk-play` for the shutter sound. The plugin runs unsandboxed inside `omarchy-shell` like every Omarchy plugin; it only launches the `omashot` binary and never touches your configuration without you asking.
+Runtime: `gtk4`, `libadwaita`, `gtk4-layer-shell`, `grim`, `wl-clipboard`; optional `tesseract` with a language pack for OCR, highlighter snapping, and auto-redact, `canberra-gtk-play` for the shutter sound. The plugin runs unsandboxed inside `omarchy-shell` like every Omarchy plugin; it only launches the `omashot` binary and never edits your configuration on its own.
 
-BSD-3-Clause. See `LICENSE`. Rust crate licenses are listed by `cargo license`.
+BSD-3-Clause. See `LICENSE`.
 
 ## Development
 
 ```sh
 cargo build --release && install -Dm755 target/release/omashot ~/.local/bin/omashot
 cargo test                                    # model, redaction, and editor gesture tests
-cargo build --release --manifest-path tools/wlptr/Cargo.toml   # virtual pointer for live gesture tests (see tools/wlptr)
 omarchy plugin validate .                     # manifest check
 omarchy-shell shell rescanPlugins             # hot-reload QML after edits
+cargo build --release --manifest-path tools/wlptr/Cargo.toml   # virtual pointer for live gesture tests
 ```
 
-See `docs/SPEC.md` for the full behavioral specification.
+See `docs/SPEC.md` for the behavioral specification.
