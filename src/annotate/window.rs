@@ -153,7 +153,12 @@ impl EditorWindow {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let header = adw::HeaderBar::new();
         let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 2);
-        header.set_title_widget(Some(&toolbar));
+        let toolbar_scroller = gtk::ScrolledWindow::new();
+        toolbar_scroller.set_policy(gtk::PolicyType::External, gtk::PolicyType::Never);
+        toolbar_scroller.set_child(Some(&toolbar));
+        toolbar_scroller.set_propagate_natural_width(true);
+        toolbar_scroller.set_propagate_natural_height(true);
+        header.set_title_widget(Some(&toolbar_scroller));
 
         let undo_btn = gtk::Button::from_icon_name("edit-undo-symbolic");
         undo_btn.set_tooltip_text(Some("Undo (Ctrl+Z)"));
@@ -172,7 +177,12 @@ impl EditorWindow {
 
         root.append(&header);
         let props = Self::build_props();
-        root.append(&props.bar);
+        // Never let a wide property bar dictate the window's minimum width.
+        let props_scroller = gtk::ScrolledWindow::new();
+        props_scroller.set_policy(gtk::PolicyType::External, gtk::PolicyType::Never);
+        props_scroller.set_child(Some(&props.bar));
+        props_scroller.set_propagate_natural_height(true);
+        root.append(&props_scroller);
 
         let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         body.append(&canvas.widget);

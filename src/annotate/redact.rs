@@ -57,24 +57,49 @@ pub fn is_sensitive(token: &str) -> bool {
     PATTERNS.with(|ps| ps.iter().any(|p| p.is_match(t)))
 }
 
-/// Build blur items covering every sensitive-looking word (and credit card number groups).
+fn is_numberish(t: &str) -> bool {
+    !t.is_empty() && t.chars().all(|c| c.is_ascii_digit() || "+()-. ".contains(c)) && t.chars().any(|c| c.is_ascii_digit())
+}
+
+fn same_line(a: &Word, b: &Word) -> bool {
+    (a.y - b.y).abs() < a.h.max(b.h).max(1) && b.x >= a.x
+}
+
+fn bbox(group: &[&Word]) -> RectF {
+    let x0 = group.iter().map(|g| g.x).min().unwrap();
+    let x1 = group.iter().map(|g| g.x + g.w).max().unwrap();
+    let y0 = group.iter().map(|g| g.y).min().unwrap();
+    let y1 = group.iter().map(|g| g.y + g.h).max().unwrap();
+    RectF::new(x0 as f64, y0 as f64, (x1 - x0) as f64, (y1 - y0) as f64)
+}
+
+/// Build blur items covering every sensitive-looking word, plus runs of numeric
+/// words on one line that only read as a phone or card number when joined
+/// (OCR splits "+1 (555) 123-4567" and "4111 1111 1111 1111" into pieces).
 pub fn redaction_items(words: &[Word], style: &Style, strength: f64) -> Vec<(Kind, Style)> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < words.len() {
         let w = &words[i];
-        // Card numbers are often split into 4 groups on one line.
-        if w.text.chars().all(|c| c.is_ascii_digit()) && w.text.len() == 4 && i + 3 < words.len() {
-            let group: Vec<&Word> = words[i..i + 4].iter().collect();
-            let joined: String = group.iter().map(|g| g.text.as_str()).collect();
-            let same_line = group.iter().all(|g| (g.y - w.y).abs() < w.h.max(1));
-            if same_line && joined.len() == 16 && luhn(&joined) {
-                let x0 = group.iter().map(|g| g.x).min().unwrap();
-                let x1 = group.iter().map(|g| g.x + g.w).max().unwrap();
-                let y0 = group.iter().map(|g| g.y).min().unwrap();
-                let y1 = group.iter().map(|g| g.y + g.h).max().unwrap();
-                out.push(blur_item(RectF::new(x0 as f64, y0 as f64, (x1 - x0) as f64, (y1 - y0) as f64), style, strength));
-                i += 4;
+        if is_numberish(&w.text) {
+            // Extend the run as far as it stays numeric and on the same line.
+            let mut j = i + 1;
+            while j < words.len() && j - i < 6 && is_numberish(&words[j].text) && same_line(&words[j - 1], &words[j]) {
+                j += 1;
+            }
+            // Try the longest run first so "+1 (555) 123-4567" wins over "(555) 123-4567".
+            let mut matched = None;
+            for end in (i + 2..=j).rev() {
+                let group: Vec<&Word> = words[i..end].iter().collect();
+                let joined = group.iter().map(|g| g.text.as_str()).collect::<Vec<_>>().join(" ");
+                if is_sensitive(&joined) {
+                    matched = Some((end, bbox(&group)));
+                    break;
+                }
+            }
+            if let Some((end, r)) = matched {
+                out.push(blur_item(r, style, strength));
+                i = end;
                 continue;
             }
         }
@@ -114,5 +139,14 @@ mod tests {
         let items = redaction_items(&words, &Style::default(), 6.0);
         assert_eq!(items.len(), 1);
         assert!(matches!(items[0].0, Kind::Blur { rect, .. } if rect.x == 47.0 && rect.w == 196.0));
+    }
+
+    #[test]
+    fn groups_split_phone_numbers() {
+        let w = |t: &str, x: i32| Word { text: t.into(), x, y: 10, w: 40, h: 12 };
+        let words = vec![w("phone", 0), w("+1", 50), w("(555)", 100), w("123-4567", 150), w("today", 260), w("2026", 320)];
+        let items = redaction_items(&words, &Style::default(), 6.0);
+        assert_eq!(items.len(), 1, "{items:?}");
+        assert!(matches!(items[0].0, Kind::Blur { rect, .. } if rect.x == 47.0 && rect.w == 146.0));
     }
 }
