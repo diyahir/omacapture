@@ -110,13 +110,22 @@ impl QuickAccessPanel {
         let keys = gtk::EventControllerKey::new();
         let gb_keys = gb.clone();
         keys.connect_key_pressed(move |_, key, _, _| {
-            let action = match key {
-                gdk::Key::c | gdk::Key::C => QaAction::Copy,
-                gdk::Key::e | gdk::Key::E => QaAction::Edit,
-                gdk::Key::o | gdk::Key::O => QaAction::Open,
-                gdk::Key::Delete | gdk::Key::BackSpace => QaAction::Delete,
-                gdk::Key::Escape | gdk::Key::q => QaAction::Dismiss,
-                _ => return glib::Propagation::Proceed,
+            let sc = gb_keys.config.get().quick_access.shortcuts;
+            let matches = |name: &str| {
+                !name.trim().is_empty() && gdk::Key::from_name(name.trim()).map(|k| k.to_lower() == key.to_lower()).unwrap_or(false)
+            };
+            let action = if matches(&sc.hover_copy) {
+                QaAction::Copy
+            } else if matches(&sc.hover_edit) {
+                QaAction::Edit
+            } else if matches(&sc.hover_open) {
+                QaAction::Open
+            } else if matches(&sc.hover_delete) {
+                QaAction::Delete
+            } else if matches(&sc.hover_dismiss) {
+                QaAction::Dismiss
+            } else {
+                return glib::Propagation::Proceed;
             };
             let actions = {
                 let qa = gb_keys.quick_access.borrow();
@@ -150,7 +159,7 @@ impl QuickAccessPanel {
             w.present();
         }
         if cfg.global_shortcuts && !self.global_binds_active {
-            self.global_binds_active = register_global_binds();
+            self.global_binds_active = register_global_binds(&cfg.shortcuts);
         }
     }
 
@@ -207,9 +216,9 @@ impl QuickAccessPanel {
     }
 }
 
-/// Super+E / Super+D / Super+Delete, alive only while a card is visible.
-/// Registered through Hyprland's Lua runtime so nothing is written to config.
-fn register_global_binds() -> bool {
+/// Global chords, alive only while a card is visible. Registered through
+/// Hyprland's Lua runtime so nothing is written to config.
+fn register_global_binds(sc: &crate::config::QuickAccessShortcuts) -> bool {
     if !crate::capture::hypr::is_hyprland() {
         return false;
     }
@@ -217,14 +226,25 @@ fn register_global_binds() -> bool {
         Ok(p) => p.to_string_lossy().to_string(),
         Err(_) => return false,
     };
+    let mut entries = Vec::new();
+    for (chord, action, label) in [
+        (&sc.global_edit, "edit", "edit last capture"),
+        (&sc.global_copy, "copy", "copy and dismiss last capture"),
+        (&sc.global_delete, "delete", "delete last capture"),
+        (&sc.global_open, "open", "open last capture"),
+    ] {
+        let chord = chord.trim();
+        if chord.is_empty() || crate::config::validate_chord(chord).is_err() {
+            continue;
+        }
+        entries.push(format!("  hl.bind(\"{chord}\", hl.dsp.exec_cmd(\"{exe} qa {action}\"), {{ description = \"Omashot: {label}\" }}),"));
+    }
+    if entries.is_empty() {
+        return false;
+    }
     let lua = format!(
-        r#"if omashot_qa_binds then for _, b in ipairs(omashot_qa_binds) do pcall(function() b:unbind() end) end end
-omashot_qa_binds = {{
-  hl.bind("SUPER + E", hl.dsp.exec_cmd("{exe} qa edit"), {{ description = "Omashot: edit last capture" }}),
-  hl.bind("SUPER + D", hl.dsp.exec_cmd("{exe} qa copy"), {{ description = "Omashot: copy and dismiss last capture" }}),
-  hl.bind("SUPER + DELETE", hl.dsp.exec_cmd("{exe} qa delete"), {{ description = "Omashot: delete last capture" }}),
-}}
-return "ok""#
+        "if omashot_qa_binds then for _, b in ipairs(omashot_qa_binds) do pcall(function() b:unbind() end) end end\nomashot_qa_binds = {{\n{}\n}}\nreturn \"ok\"",
+        entries.join("\n")
     );
     let ok = std::process::Command::new("hyprctl")
         .args(["eval", &lua])
@@ -315,7 +335,25 @@ fn build_card(
     close.set_margin_start(6);
     overlay.add_overlay(&close);
 
-    let hint = gtk::Label::new(Some("hover: c e o ⌫ · Super+E edit · Super+D done"));
+    let sc = gb.config.get().quick_access.shortcuts;
+    let short = |chord: &str| chord.replace("SUPER", "Super").replace(" + ", "+").replace("DELETE", "Del");
+    let mut parts = Vec::new();
+    let hover: Vec<&str> = [&sc.hover_copy, &sc.hover_edit, &sc.hover_open, &sc.hover_delete]
+        .iter()
+        .map(|k| k.as_str().trim())
+        .filter(|k| !k.is_empty())
+        .collect();
+    if !hover.is_empty() {
+        parts.push(format!("hover: {}", hover.join(" ")));
+    }
+    if !sc.global_edit.trim().is_empty() {
+        parts.push(format!("{} edit", short(&sc.global_edit)));
+    }
+    if !sc.global_copy.trim().is_empty() {
+        parts.push(format!("{} done", short(&sc.global_copy)));
+    }
+    let hint = gtk::Label::new(Some(&parts.join(" · ")));
+    hint.set_visible(!parts.is_empty());
     hint.add_css_class("qa-hint");
     hint.set_halign(gtk::Align::End);
     hint.set_valign(gtk::Align::Start);
@@ -338,10 +376,18 @@ fn build_card(
         b.set_tooltip_text(Some(tip));
         b
     };
-    let copy = mk("edit-copy-symbolic", "Copy", "Copy to clipboard and dismiss (c, Super+D)");
-    let edit = mk("document-edit-symbolic", "Edit", "Annotate (e, Super+E)");
-    let openb = mk("folder-open-symbolic", "Open", "Open with default app (o)");
-    let del = mk("user-trash-symbolic", "Delete", "Delete (Delete, Super+Delete)");
+    let tip = |what: &str, hover: &str, global: &str| {
+        let keys: Vec<String> = [hover.trim().to_string(), short(global)].into_iter().filter(|k| !k.is_empty()).collect();
+        if keys.is_empty() {
+            what.to_string()
+        } else {
+            format!("{what} ({})", keys.join(", "))
+        }
+    };
+    let copy = mk("edit-copy-symbolic", "Copy", &tip("Copy to clipboard and dismiss", &sc.hover_copy, &sc.global_copy));
+    let edit = mk("document-edit-symbolic", "Edit", &tip("Annotate", &sc.hover_edit, &sc.global_edit));
+    let openb = mk("folder-open-symbolic", "Open", &tip("Open with default app", &sc.hover_open, &sc.global_open));
+    let del = mk("user-trash-symbolic", "Delete", &tip("Delete", &sc.hover_delete, &sc.global_delete));
     for b in [&copy, &edit, &openb, &del] {
         bar.append(b);
     }

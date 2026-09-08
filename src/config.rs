@@ -110,6 +110,88 @@ pub enum Corner {
     BottomRight,
 }
 
+/// Keys that act on Quick Access cards. Hover keys are GDK key names that work
+/// while the pointer is over a card; global chords are Hyprland bindings that
+/// exist only while a card is visible. An empty string disables a binding.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QuickAccessShortcuts {
+    pub hover_copy: String,
+    pub hover_edit: String,
+    pub hover_open: String,
+    pub hover_delete: String,
+    pub hover_dismiss: String,
+    pub global_edit: String,
+    pub global_copy: String,
+    pub global_delete: String,
+    pub global_open: String,
+}
+
+impl Default for QuickAccessShortcuts {
+    fn default() -> Self {
+        Self {
+            hover_copy: "c".into(),
+            hover_edit: "e".into(),
+            hover_open: "o".into(),
+            hover_delete: "Delete".into(),
+            hover_dismiss: "Escape".into(),
+            global_edit: "SUPER + E".into(),
+            global_copy: "SUPER + D".into(),
+            global_delete: "SUPER + DELETE".into(),
+            global_open: String::new(),
+        }
+    }
+}
+
+/// A Hyprland chord like "SUPER + SHIFT + E"; empty means unbound.
+pub fn validate_chord(chord: &str) -> Result<()> {
+    let c = chord.trim();
+    if c.is_empty() {
+        return Ok(());
+    }
+    if c.contains('"') || c.contains('\\') || c.contains('\n') {
+        anyhow::bail!("shortcut {c:?} contains an invalid character");
+    }
+    let parts: Vec<&str> = c.split('+').map(|p| p.trim()).collect();
+    if parts.iter().any(|p| p.is_empty()) {
+        anyhow::bail!("shortcut {c:?} has an empty part");
+    }
+    let (mods, key) = parts.split_at(parts.len() - 1);
+    for m in mods {
+        if !matches!(m.to_ascii_uppercase().as_str(), "SUPER" | "SHIFT" | "CTRL" | "ALT") {
+            anyhow::bail!("shortcut {c:?}: unknown modifier {m:?} (use SUPER, SHIFT, CTRL, ALT)");
+        }
+    }
+    if !key[0].chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_') {
+        anyhow::bail!("shortcut {c:?}: key {:?} must be a plain key name", key[0]);
+    }
+    Ok(())
+}
+
+/// A single GDK key name such as "c", "Delete", or "F5"; empty means unbound.
+pub fn validate_hover_key(name: &str) -> Result<()> {
+    let n = name.trim();
+    if n.is_empty() {
+        return Ok(());
+    }
+    if gtk::gdk::Key::from_name(n).is_none() {
+        anyhow::bail!("{n:?} is not a key name (examples: c, Delete, Escape, F5)");
+    }
+    Ok(())
+}
+
+impl QuickAccessShortcuts {
+    pub fn validate(&self) -> Result<()> {
+        for k in [&self.hover_copy, &self.hover_edit, &self.hover_open, &self.hover_delete, &self.hover_dismiss] {
+            validate_hover_key(k)?;
+        }
+        for c in [&self.global_edit, &self.global_copy, &self.global_delete, &self.global_open] {
+            validate_chord(c)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct QuickAccess {
@@ -121,9 +203,10 @@ pub struct QuickAccess {
     pub thumbnail_width: i32,
     /// Keep the editor open after dragging out of Quick Access.
     pub keep_editing_after_drag: bool,
-    /// While a card is visible, register Super+E / Super+D / Super+Delete with Hyprland
+    /// While a card is visible, register the global chords below with Hyprland
     /// for the newest capture. Removed again as soon as the last card goes away.
     pub global_shortcuts: bool,
+    pub shortcuts: QuickAccessShortcuts,
 }
 
 impl Default for QuickAccess {
@@ -136,6 +219,7 @@ impl Default for QuickAccess {
             thumbnail_width: 240,
             keep_editing_after_drag: false,
             global_shortcuts: true,
+            shortcuts: QuickAccessShortcuts::default(),
         }
     }
 }
@@ -251,6 +335,9 @@ impl Config {
                         cfg.annotate.stroke_width = cfg.annotate.stroke_width.clamp(0.5, 64.0);
                         cfg.annotate.font_size = cfg.annotate.font_size.clamp(4.0, 400.0);
                         cfg.general.delay_ms = cfg.general.delay_ms.min(60_000);
+                        if cfg.quick_access.shortcuts.validate().is_err() {
+                            cfg.quick_access.shortcuts = QuickAccessShortcuts::default();
+                        }
                     }
                     cfg
                 }
@@ -381,6 +468,7 @@ impl Config {
         if self.general.delay_ms > 60_000 {
             anyhow::bail!("general.delay_ms must be at most 60000");
         }
+        self.quick_access.shortcuts.validate()?;
         Ok(())
     }
 }

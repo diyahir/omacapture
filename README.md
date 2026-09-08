@@ -135,7 +135,18 @@ auto_dismiss_secs = 8                     # 0 keeps cards until dismissed
 max_cards = 4
 thumbnail_width = 240
 keep_editing_after_drag = false
-global_shortcuts = true                   # Super+E / Super+D / Super+Delete while a card is showing
+global_shortcuts = true                   # register the global chords below while a card is showing
+
+[quick_access.shortcuts]                  # empty string disables a key
+hover_copy = "c"                          # GDK key names, active while hovering a card
+hover_edit = "e"
+hover_open = "o"
+hover_delete = "Delete"
+hover_dismiss = "Escape"
+global_edit = "SUPER + E"                 # Hyprland chords, alive only while a card is showing
+global_copy = "SUPER + D"
+global_delete = "SUPER + DELETE"
+global_open = ""
 
 [annotate]
 stroke_color = "#ff3b30"                  # the theme red is used while this is the stock default
