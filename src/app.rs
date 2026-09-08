@@ -96,7 +96,7 @@ pub fn dispatch(gb: &Rc<Omashot>, cmd: Command) {
         Command::Annotate { file } => crate::annotate::open_file(gb, &file),
         Command::History => crate::history::browser::open(gb),
         Command::Settings => crate::annotate::preferences::open(gb),
-        Command::Mcp | Command::Keybinds { .. } => {}
+        Command::Mcp { .. } | Command::Keybinds { .. } => {}
     }
 }
 

@@ -52,7 +52,11 @@ pub enum Command {
     /// Run the resident daemon so hotkeys respond instantly.
     Daemon,
     /// Serve the Model Context Protocol over stdio for AI agents.
-    Mcp,
+    Mcp {
+        /// Expose only capture, OCR, read, and list tools; never write user-named files or change settings.
+        #[arg(long)]
+        read_only: bool,
+    },
     /// Install, remove, or inspect the optional Hyprland keybindings.
     Keybinds {
         #[command(subcommand)]
@@ -94,8 +98,8 @@ fn main() -> glib::ExitCode {
     }
     // Headless subcommands never touch GTK.
     if let Ok(cli) = Cli::try_parse_from(normalize_args(std::env::args_os())) {
-        if matches!(cli.command, Some(Command::Mcp)) {
-            return match mcp::run() {
+        if let Some(Command::Mcp { read_only }) = cli.command {
+            return match mcp::run(read_only) {
                 Ok(()) => glib::ExitCode::SUCCESS,
                 Err(e) => {
                     eprintln!("mcp: {e}");
