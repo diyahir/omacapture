@@ -104,12 +104,30 @@ pub fn install() {
     PROVIDER.with(|p| *p.borrow_mut() = Some(provider));
     apply();
 
-    if let Some(path) = colors_path() {
-        let file = gio::File::for_path(&path);
-        if let Ok(monitor) = file.monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE) {
-            monitor.connect_changed(|_, _, _, event| {
-                if matches!(event, gio::FileMonitorEvent::ChangesDoneHint | gio::FileMonitorEvent::Changed | gio::FileMonitorEvent::Created) {
-                    glib::timeout_add_local_once(std::time::Duration::from_millis(200), apply);
+    // `omarchy-theme-set` builds `next-theme` and renames it over `theme`, so a
+    // watch on colors.toml itself goes stale after the first switch. Watch the
+    // `current` directory instead and re-read the file by path on every change.
+    let state = dirs::state_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".local/state"));
+    let current_dir = state.join("omarchy/current");
+    if current_dir.is_dir() {
+        let dir = gio::File::for_path(&current_dir);
+        if let Ok(monitor) = dir.monitor_directory(gio::FileMonitorFlags::WATCH_MOVES, gio::Cancellable::NONE) {
+            monitor.set_rate_limit(50);
+            monitor.connect_changed(|_, file, _, event| {
+                let name = file.basename().map(|b| b.to_string_lossy().to_string()).unwrap_or_default();
+                let relevant = name == "theme" || name == "theme.name" || name == "next-theme";
+                if relevant
+                    && matches!(
+                        event,
+                        gio::FileMonitorEvent::ChangesDoneHint
+                            | gio::FileMonitorEvent::Changed
+                            | gio::FileMonitorEvent::Created
+                            | gio::FileMonitorEvent::Renamed
+                            | gio::FileMonitorEvent::MovedIn
+                            | gio::FileMonitorEvent::Moved
+                    )
+                {
+                    schedule_apply();
                 }
             });
             MONITOR.with(|m| *m.borrow_mut() = Some(monitor));
@@ -117,9 +135,35 @@ pub fn install() {
     }
 }
 
+thread_local! {
+    static PENDING: RefCell<Option<glib::SourceId>> = const { RefCell::new(None) };
+    static APPLIED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Coalesce the burst of events a theme switch produces into one re-apply,
+/// and re-apply once more shortly after in case the file was still being written.
+fn schedule_apply() {
+    PENDING.with(|p| {
+        if let Some(id) = p.borrow_mut().take() {
+            id.remove();
+        }
+        let id = glib::timeout_add_local_once(std::time::Duration::from_millis(60), || {
+            PENDING.with(|p| *p.borrow_mut() = None);
+            apply();
+            glib::timeout_add_local_once(std::time::Duration::from_millis(400), apply);
+        });
+        *p.borrow_mut() = Some(id);
+    });
+}
+
 fn apply() {
     let theme = load();
+    let changed = CURRENT.with(|c| c.borrow().as_ref().map(|t| format!("{t:?}")) != theme.as_ref().map(|t| format!("{t:?}")));
     CURRENT.with(|c| *c.borrow_mut() = theme.clone());
+    if !changed && PROVIDER.with(|p| p.borrow().is_some()) && APPLIED.with(|a| a.get()) {
+        return;
+    }
+    APPLIED.with(|a| a.set(true));
     let manager = adw::StyleManager::default();
     let css = match &theme {
         Some(t) => {
