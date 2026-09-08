@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      gtk:
+        patterns: ["gtk4", "libadwaita", "gtk4-layer-shell", "glib", "gio", "cairo-rs", "pango", "pangocairo", "gdk-pixbuf"]
+      all-minor:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

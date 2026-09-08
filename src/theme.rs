@@ -56,10 +56,8 @@ thread_local! {
 
 pub fn colors_path() -> Option<PathBuf> {
     let state = dirs::state_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".local/state"));
-    let candidates = [
-        state.join("omarchy/current/theme/colors.toml"),
-        dirs::config_dir().unwrap_or_default().join("omarchy/current/theme/colors.toml"),
-    ];
+    let candidates =
+        [state.join("omarchy/current/theme/colors.toml"), dirs::config_dir().unwrap_or_default().join("omarchy/current/theme/colors.toml")];
     candidates.into_iter().find(|p| p.exists())
 }
 
@@ -74,9 +72,7 @@ pub fn current() -> Option<ThemeColors> {
 }
 
 pub fn accent_rgb() -> (f64, f64, f64) {
-    current()
-        .and_then(|t| parse_rgb(&t.accent))
-        .unwrap_or((0.35, 0.65, 1.0))
+    current().and_then(|t| parse_rgb(&t.accent)).unwrap_or((0.35, 0.65, 1.0))
 }
 
 pub fn parse_rgb(hex: &str) -> Option<(f64, f64, f64)> {
@@ -88,13 +84,11 @@ pub fn parse_rgb(hex: &str) -> Option<(f64, f64, f64)> {
     Some((((v >> 16) & 255) as f64 / 255.0, ((v >> 8) & 255) as f64 / 255.0, (v & 255) as f64 / 255.0))
 }
 
-pub fn font_family() -> String {
-    "monospace".into()
-}
-
 /// Install the base stylesheet plus theme overrides, and watch the theme for changes.
 pub fn install() {
-    let Some(display) = gdk::Display::default() else { return };
+    let Some(display) = gdk::Display::default() else {
+        return;
+    };
     let base = gtk::CssProvider::new();
     base.load_from_string(include_str!("style.css"));
     gtk::style_context_add_provider_for_display(&display, &base, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
@@ -183,7 +177,13 @@ fn apply() {
 }
 
 fn theme_css(t: &ThemeColors) -> String {
-    let c = |v: &str, fallback: &str| if v.is_empty() { fallback.to_string() } else { v.to_string() };
+    let c = |v: &str, fallback: &str| {
+        if v.is_empty() {
+            fallback.to_string()
+        } else {
+            v.to_string()
+        }
+    };
     let dark = t.is_dark();
     let bg = c(&t.background, if dark { "#1e1e1e" } else { "#f5f5f5" });
     let bg_dark = c(&t.dark_background, &bg);

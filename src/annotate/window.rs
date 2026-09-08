@@ -7,7 +7,6 @@ use super::{redact, session};
 use crate::app::Omashot;
 use crate::capture::Frame;
 use adw::prelude::*;
-use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
@@ -107,8 +106,14 @@ fn scale(min: f64, max: f64, step: f64, width: i32) -> gtk::Scale {
     s
 }
 
-const CROP_ASPECTS: [(&str, Option<(f64, f64)>); 6] =
-    [("Free", None), ("1:1", Some((1.0, 1.0))), ("4:3", Some((4.0, 3.0))), ("3:2", Some((3.0, 2.0))), ("16:9", Some((16.0, 9.0))), ("21:9", Some((21.0, 9.0)))];
+const CROP_ASPECTS: [(&str, Option<(f64, f64)>); 6] = [
+    ("Free", None),
+    ("1:1", Some((1.0, 1.0))),
+    ("4:3", Some((4.0, 3.0))),
+    ("3:2", Some((3.0, 2.0))),
+    ("16:9", Some((16.0, 9.0))),
+    ("21:9", Some((21.0, 9.0))),
+];
 const CANVAS_ASPECTS: [(&str, Option<(f64, f64)>); 5] =
     [("Auto", None), ("1:1", Some((1.0, 1.0))), ("4:3", Some((4.0, 3.0))), ("3:2", Some((3.0, 2.0))), ("16:9", Some((16.0, 9.0)))];
 
@@ -131,10 +136,12 @@ impl EditorWindow {
         style.width = cfg.annotate.stroke_width;
         style.font_family = cfg.annotate.font_family.clone();
         style.font_size = cfg.annotate.font_size;
-        let mut options = ToolOptions::default();
-        options.blur_strength = cfg.annotate.blur_strength.clamp(1.0, 20.0);
-        options.blur_effect = if cfg.annotate.blur_style == "gaussian" { BlurEffect::Gaussian } else { BlurEffect::Pixelate };
-        options.watermark_text = cfg.annotate.watermark_text.clone();
+        let options = ToolOptions {
+            blur_strength: cfg.annotate.blur_strength.clamp(1.0, 20.0),
+            blur_effect: if cfg.annotate.blur_style == "gaussian" { BlurEffect::Gaussian } else { BlurEffect::Pixelate },
+            watermark_text: cfg.annotate.watermark_text.clone(),
+            ..ToolOptions::default()
+        };
 
         let canvas = Canvas::new(frame, style, options);
         if let Some(sheet) = sheet {
@@ -145,7 +152,7 @@ impl EditorWindow {
             .application(&gb.app)
             .default_width(1200)
             .default_height(800)
-            .title(&Self::title_for(source.as_deref()))
+            .title(Self::title_for(source.as_deref()))
             .build();
         win.add_css_class("omashot-window");
 
@@ -288,7 +295,8 @@ impl EditorWindow {
             drag_src.connect_prepare(move |src, _, _| {
                 let img = t.canvas.render_export();
                 let path = crate::export::write_temp_png(&img).ok()?;
-                let thumb = image::imageops::thumbnail(&img, 160, (160.0 * img.height() as f64 / img.width().max(1) as f64).max(1.0) as u32);
+                let thumb =
+                    image::imageops::thumbnail(&img, 160, (160.0 * img.height() as f64 / img.width().max(1) as f64).max(1.0) as u32);
                 src.set_icon(Some(&Frame { image: thumb, scale: 1.0 }.to_texture()), 0, 0);
                 let file = gio::File::for_path(&path);
                 let uri = format!("{}\r\n", file.uri());
@@ -417,6 +425,7 @@ impl EditorWindow {
 
     // ----- property bar -----
 
+    #[allow(deprecated)]
     fn build_props() -> Props {
         let bar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         bar.add_css_class("toolbar");
@@ -425,7 +434,8 @@ impl EditorWindow {
         bar.set_margin_end(8);
 
         let palette = gtk::Box::new(gtk::Orientation::Horizontal, 2);
-        let swatches: Vec<String> = crate::theme::current().map(|t| t.palette()).unwrap_or_else(|| PALETTE.iter().map(|s| s.to_string()).collect());
+        let swatches: Vec<String> =
+            crate::theme::current().map(|t| t.palette()).unwrap_or_else(|| PALETTE.iter().map(|s| s.to_string()).collect());
         for hex in swatches {
             let hex = hex.as_str();
             let b = gtk::Button::new();
@@ -843,6 +853,7 @@ impl EditorWindow {
 
     // ----- sidebar -----
 
+    #[allow(deprecated)]
     fn build_sidebar() -> Sidebar {
         let revealer = gtk::Revealer::new();
         revealer.set_transition_type(gtk::RevealerTransitionType::SlideLeft);
@@ -933,7 +944,9 @@ impl EditorWindow {
             let mut i = 0;
             let mut child = flow.first_child();
             while let Some(c) = child {
-                if let Some(btn) = c.downcast_ref::<gtk::FlowBoxChild>().and_then(|fc| fc.child()).and_then(|w| w.downcast::<gtk::Button>().ok()) {
+                if let Some(btn) =
+                    c.downcast_ref::<gtk::FlowBoxChild>().and_then(|fc| fc.child()).and_then(|w| w.downcast::<gtk::Button>().ok())
+                {
                     let t = self.clone();
                     let (_, a, b) = GRADIENTS[i.min(GRADIENTS.len() - 1)];
                     btn.connect_clicked(move |_| {
@@ -1059,11 +1072,50 @@ impl EditorWindow {
         let tool_is = |ts: &[Tool]| ts.contains(&tool);
         let style = selected.first().map(|i| i.style.clone()).unwrap_or_else(|| s.style.clone());
 
-        let show_color = !cropping && (tool_is(&[Tool::Rect, Tool::FilledRect, Tool::Oval, Tool::Arrow, Tool::Line, Tool::Text, Tool::Highlight, Tool::Counter, Tool::Watermark, Tool::Pencil]) || (!kinds.is_empty() && !has(&|k| matches!(k, Kind::Blur { .. } | Kind::Spotlight { .. })) && kinds.iter().all(|k| !matches!(k, Kind::Blur { .. } | Kind::Spotlight { .. }))));
-        let show_width = !cropping && (tool_is(&[Tool::Rect, Tool::FilledRect, Tool::Oval, Tool::Arrow, Tool::Line, Tool::Highlight, Tool::Pencil]) || has(&|k| matches!(k, Kind::Rect { .. } | Kind::Oval { .. } | Kind::Arrow { .. } | Kind::Line { .. } | Kind::Highlight { .. } | Kind::Pencil { .. })));
-        let show_line = !cropping && (tool_is(&[Tool::Rect, Tool::FilledRect, Tool::Oval, Tool::Arrow, Tool::Line]) || has(&|k| matches!(k, Kind::Rect { .. } | Kind::Oval { .. } | Kind::Arrow { .. } | Kind::Line { .. })));
-        let show_radius = !cropping && (tool_is(&[Tool::Rect, Tool::FilledRect, Tool::Spotlight, Tool::Blur]) || has(&|k| matches!(k, Kind::Rect { .. } | Kind::Spotlight { .. } | Kind::Blur { .. } | Kind::Text { presentation: TextPresentation::Label | TextPresentation::Callout, .. })));
-        let show_font = !cropping && (tool_is(&[Tool::Text, Tool::Watermark]) || has(&|k| matches!(k, Kind::Text { .. } | Kind::Watermark { .. })));
+        let show_color = !cropping
+            && (tool_is(&[
+                Tool::Rect,
+                Tool::FilledRect,
+                Tool::Oval,
+                Tool::Arrow,
+                Tool::Line,
+                Tool::Text,
+                Tool::Highlight,
+                Tool::Counter,
+                Tool::Watermark,
+                Tool::Pencil,
+            ]) || (!kinds.is_empty()
+                && !has(&|k| matches!(k, Kind::Blur { .. } | Kind::Spotlight { .. }))
+                && kinds.iter().all(|k| !matches!(k, Kind::Blur { .. } | Kind::Spotlight { .. }))));
+        let show_width = !cropping
+            && (tool_is(&[Tool::Rect, Tool::FilledRect, Tool::Oval, Tool::Arrow, Tool::Line, Tool::Highlight, Tool::Pencil])
+                || has(&|k| {
+                    matches!(
+                        k,
+                        Kind::Rect { .. }
+                            | Kind::Oval { .. }
+                            | Kind::Arrow { .. }
+                            | Kind::Line { .. }
+                            | Kind::Highlight { .. }
+                            | Kind::Pencil { .. }
+                    )
+                }));
+        let show_line = !cropping
+            && (tool_is(&[Tool::Rect, Tool::FilledRect, Tool::Oval, Tool::Arrow, Tool::Line])
+                || has(&|k| matches!(k, Kind::Rect { .. } | Kind::Oval { .. } | Kind::Arrow { .. } | Kind::Line { .. })));
+        let show_radius = !cropping
+            && (tool_is(&[Tool::Rect, Tool::FilledRect, Tool::Spotlight, Tool::Blur])
+                || has(&|k| {
+                    matches!(
+                        k,
+                        Kind::Rect { .. }
+                            | Kind::Spotlight { .. }
+                            | Kind::Blur { .. }
+                            | Kind::Text { presentation: TextPresentation::Label | TextPresentation::Callout, .. }
+                    )
+                }));
+        let show_font =
+            !cropping && (tool_is(&[Tool::Text, Tool::Watermark]) || has(&|k| matches!(k, Kind::Text { .. } | Kind::Watermark { .. })));
         let show_text = !cropping && (tool == Tool::Text || has(&|k| matches!(k, Kind::Text { .. })));
         let show_arrow = !cropping && (tool == Tool::Arrow || has(&|k| matches!(k, Kind::Arrow { .. })));
         let show_blur = !cropping && (tool == Tool::Blur || has(&|k| matches!(k, Kind::Blur { .. })));
@@ -1165,7 +1217,9 @@ impl EditorWindow {
             let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
             let shift = mods.contains(gdk::ModifierType::SHIFT_MASK);
             // Let text entry widgets keep their keys.
-            let in_text = GtkWindowExt::focus(&t.win).map(|w| w.is::<gtk::Text>() || w.is::<gtk::TextView>() || w.is::<gtk::Entry>()).unwrap_or(false);
+            let in_text = GtkWindowExt::focus(&t.win)
+                .map(|w| w.is::<gtk::Text>() || w.is::<gtk::TextView>() || w.is::<gtk::Entry>())
+                .unwrap_or(false);
             if in_text && key != gdk::Key::Escape {
                 if key == gdk::Key::s && ctrl {
                     t.save(false);
@@ -1269,9 +1323,12 @@ impl EditorWindow {
             group.add_action(&a);
         };
         let t = self.clone();
-        add("save", Box::new(move || {
-            t.save(false);
-        }));
+        add(
+            "save",
+            Box::new(move || {
+                t.save(false);
+            }),
+        );
         let t = self.clone();
         add("export", Box::new(move || t.export_as()));
         let t = self.clone();
@@ -1285,11 +1342,14 @@ impl EditorWindow {
         let t = self.clone();
         add("delete", Box::new(move || t.canvas.delete_selection()));
         let t = self.clone();
-        add("open-external", Box::new(move || {
-            if let Some(p) = t.source.borrow().clone() {
-                let _ = std::process::Command::new("xdg-open").arg(p).spawn();
-            }
-        }));
+        add(
+            "open-external",
+            Box::new(move || {
+                if let Some(p) = t.source.borrow().clone() {
+                    let _ = std::process::Command::new("xdg-open").arg(p).spawn();
+                }
+            }),
+        );
         let t = self.clone();
         add("delete-file", Box::new(move || t.delete_file()));
         let t = self.clone();
@@ -1372,12 +1432,10 @@ impl EditorWindow {
         let dialog = gtk::FileDialog::new();
         dialog.set_title("Export image");
         let cfg = self.gb.config.get();
-        let name = self
-            .source
-            .borrow()
-            .as_ref()
-            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
-            .unwrap_or_else(|| format!("{}.{}", chrono::Local::now().format(&cfg.general.filename_pattern), cfg.general.format.extension()));
+        let name =
+            self.source.borrow().as_ref().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())).unwrap_or_else(|| {
+                format!("{}.{}", chrono::Local::now().format(&cfg.general.filename_pattern), cfg.general.format.extension())
+            });
         dialog.set_initial_name(Some(&name));
         dialog.set_initial_folder(Some(&gio::File::for_path(&cfg.general.save_folder)));
         let t = self.clone();
@@ -1402,7 +1460,8 @@ impl EditorWindow {
             self.win.destroy();
             return;
         };
-        let dialog = adw::AlertDialog::new(Some("Delete this screenshot?"), Some(&format!("{} will be moved to the trash.", path.display())));
+        let dialog =
+            adw::AlertDialog::new(Some("Delete this screenshot?"), Some(&format!("{} will be moved to the trash.", path.display())));
         dialog.add_responses(&[("cancel", "Cancel"), ("delete", "Delete")]);
         dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
         let t = self.clone();

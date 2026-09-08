@@ -17,7 +17,15 @@ fn switch_row(title: &str, subtitle: Option<&str>, value: bool, on_change: impl 
     row
 }
 
-fn spin_row(title: &str, subtitle: Option<&str>, min: f64, max: f64, step: f64, value: f64, on_change: impl Fn(f64) + 'static) -> adw::SpinRow {
+fn spin_row(
+    title: &str,
+    subtitle: Option<&str>,
+    min: f64,
+    max: f64,
+    step: f64,
+    value: f64,
+    on_change: impl Fn(f64) + 'static,
+) -> adw::SpinRow {
     let row = adw::SpinRow::with_range(min, max, step);
     row.set_title(title);
     if let Some(s) = subtitle {
@@ -46,7 +54,12 @@ fn combo_row(title: &str, items: &[&str], selected: u32, on_change: impl Fn(u32)
     row
 }
 
-fn matrix_group(gb: &Rc<Omashot>, title: &str, get: fn(&crate::config::Config) -> AfterCapture, set: fn(&mut crate::config::Config, AfterCapture)) -> adw::PreferencesGroup {
+fn matrix_group(
+    gb: &Rc<Omashot>,
+    title: &str,
+    get: fn(&crate::config::Config) -> AfterCapture,
+    set: fn(&mut crate::config::Config, AfterCapture),
+) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::new();
     group.set_title(title);
     let cur = get(&gb.config.get());
@@ -71,7 +84,8 @@ pub fn open(gb: &Rc<Omashot>) {
     let outer = gb.clone();
     let cfg = gb.config.get();
     // Categories in a side list, the selected page in the main panel.
-    let win = adw::ApplicationWindow::builder().application(&gb.app).title("Omashot Preferences").default_width(860).default_height(640).build();
+    let win =
+        adw::ApplicationWindow::builder().application(&gb.app).title("Omashot Preferences").default_width(860).default_height(640).build();
     win.add_css_class("omashot-window");
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let header = adw::HeaderBar::new();
@@ -176,31 +190,46 @@ pub fn open(gb: &Rc<Omashot>) {
             ImageFormat::Webp => 2,
         };
         g_files.add(&combo_row("Format", &["PNG", "JPG", "WebP"], sel, move |i| {
-            gb.config.update(|c| c.general.format = match i {
-                1 => ImageFormat::Jpg,
-                2 => ImageFormat::Webp,
-                _ => ImageFormat::Png,
+            gb.config.update(|c| {
+                c.general.format = match i {
+                    1 => ImageFormat::Jpg,
+                    2 => ImageFormat::Webp,
+                    _ => ImageFormat::Png,
+                }
             })
         }));
     }
     {
         let gb = outer.clone();
-        g_files.add(&spin_row("JPG quality", None, 1.0, 100.0, 1.0, cfg.general.quality as f64, move |v| gb.config.update(|c| c.general.quality = v as u8)));
+        g_files.add(&spin_row("JPG quality", None, 1.0, 100.0, 1.0, cfg.general.quality as f64, move |v| {
+            gb.config.update(|c| c.general.quality = v as u8)
+        }));
     }
     general.add(&g_files);
     let g_capture = adw::PreferencesGroup::new();
     g_capture.set_title("Capture");
     {
         let gb = outer.clone();
-        g_capture.add(&switch_row("Include cursor", None, cfg.general.include_cursor, move |v| gb.config.update(|c| c.general.include_cursor = v)));
+        g_capture.add(&switch_row("Include cursor", None, cfg.general.include_cursor, move |v| {
+            gb.config.update(|c| c.general.include_cursor = v)
+        }));
         let gb = outer.clone();
         g_capture.add(&switch_row("Shutter sound", None, cfg.general.sound, move |v| gb.config.update(|c| c.general.sound = v)));
         let gb = outer.clone();
-        g_capture.add(&switch_row("Notifications", Some("Shown when Quick Access is off"), cfg.general.notifications, move |v| gb.config.update(|c| c.general.notifications = v)));
+        g_capture.add(&switch_row("Notifications", Some("Shown when Quick Access is off"), cfg.general.notifications, move |v| {
+            gb.config.update(|c| c.general.notifications = v)
+        }));
         let gb = outer.clone();
-        g_capture.add(&switch_row("Remember last area", Some("Press Enter in the overlay to reuse it"), cfg.general.remember_last_area, move |v| gb.config.update(|c| c.general.remember_last_area = v)));
+        g_capture.add(&switch_row(
+            "Remember last area",
+            Some("Press Enter in the overlay to reuse it"),
+            cfg.general.remember_last_area,
+            move |v| gb.config.update(|c| c.general.remember_last_area = v),
+        ));
         let gb = outer.clone();
-        g_capture.add(&spin_row("Capture delay (ms)", None, 0.0, 10_000.0, 100.0, cfg.general.delay_ms as f64, move |v| gb.config.update(|c| c.general.delay_ms = v as u32)));
+        g_capture.add(&spin_row("Capture delay (ms)", None, 0.0, 10_000.0, 100.0, cfg.general.delay_ms as f64, move |v| {
+            gb.config.update(|c| c.general.delay_ms = v as u32)
+        }));
     }
     general.add(&g_capture);
     add_page(&general);
@@ -222,7 +251,9 @@ pub fn open(gb: &Rc<Omashot>) {
     let g_qa = adw::PreferencesGroup::new();
     {
         let gb = outer.clone();
-        g_qa.add(&switch_row("Show Quick Access panel", None, cfg.quick_access.enabled, move |v| gb.config.update(|c| c.quick_access.enabled = v)));
+        g_qa.add(&switch_row("Show Quick Access panel", None, cfg.quick_access.enabled, move |v| {
+            gb.config.update(|c| c.quick_access.enabled = v)
+        }));
         let gb = outer.clone();
         let sel = match cfg.quick_access.corner {
             Corner::TopLeft => 0,
@@ -231,21 +262,40 @@ pub fn open(gb: &Rc<Omashot>) {
             Corner::BottomRight => 3,
         };
         g_qa.add(&combo_row("Position", &["Top left", "Top right", "Bottom left", "Bottom right"], sel, move |i| {
-            gb.config.update(|c| c.quick_access.corner = match i {
-                0 => Corner::TopLeft,
-                1 => Corner::TopRight,
-                2 => Corner::BottomLeft,
-                _ => Corner::BottomRight,
+            gb.config.update(|c| {
+                c.quick_access.corner = match i {
+                    0 => Corner::TopLeft,
+                    1 => Corner::TopRight,
+                    2 => Corner::BottomLeft,
+                    _ => Corner::BottomRight,
+                }
             })
         }));
         let gb = outer.clone();
-        g_qa.add(&spin_row("Auto-dismiss (seconds)", Some("0 keeps cards until dismissed"), 0.0, 120.0, 1.0, cfg.quick_access.auto_dismiss_secs as f64, move |v| gb.config.update(|c| c.quick_access.auto_dismiss_secs = v as u32)));
+        g_qa.add(&spin_row(
+            "Auto-dismiss (seconds)",
+            Some("0 keeps cards until dismissed"),
+            0.0,
+            120.0,
+            1.0,
+            cfg.quick_access.auto_dismiss_secs as f64,
+            move |v| gb.config.update(|c| c.quick_access.auto_dismiss_secs = v as u32),
+        ));
         let gb = outer.clone();
-        g_qa.add(&spin_row("Maximum cards", None, 1.0, 10.0, 1.0, cfg.quick_access.max_cards as f64, move |v| gb.config.update(|c| c.quick_access.max_cards = v as usize)));
+        g_qa.add(&spin_row("Maximum cards", None, 1.0, 10.0, 1.0, cfg.quick_access.max_cards as f64, move |v| {
+            gb.config.update(|c| c.quick_access.max_cards = v as usize)
+        }));
         let gb = outer.clone();
-        g_qa.add(&spin_row("Thumbnail width", None, 120.0, 480.0, 10.0, cfg.quick_access.thumbnail_width as f64, move |v| gb.config.update(|c| c.quick_access.thumbnail_width = v as i32)));
+        g_qa.add(&spin_row("Thumbnail width", None, 120.0, 480.0, 10.0, cfg.quick_access.thumbnail_width as f64, move |v| {
+            gb.config.update(|c| c.quick_access.thumbnail_width = v as i32)
+        }));
         let gb = outer.clone();
-        g_qa.add(&switch_row("Keep editing after drag", Some("Leave the editor open after dragging into another app"), cfg.quick_access.keep_editing_after_drag, move |v| gb.config.update(|c| c.quick_access.keep_editing_after_drag = v)));
+        g_qa.add(&switch_row(
+            "Keep editing after drag",
+            Some("Leave the editor open after dragging into another app"),
+            cfg.quick_access.keep_editing_after_drag,
+            move |v| gb.config.update(|c| c.quick_access.keep_editing_after_drag = v),
+        ));
     }
     qa.add(&g_qa);
     add_page(&qa);
@@ -260,17 +310,26 @@ pub fn open(gb: &Rc<Omashot>) {
         let gb = outer.clone();
         g_ann.add(&entry_row("Stroke color (hex)", &cfg.annotate.stroke_color, move |v| gb.config.update(|c| c.annotate.stroke_color = v)));
         let gb = outer.clone();
-        g_ann.add(&spin_row("Stroke width", None, 1.0, 20.0, 1.0, cfg.annotate.stroke_width, move |v| gb.config.update(|c| c.annotate.stroke_width = v)));
+        g_ann.add(&spin_row("Stroke width", None, 1.0, 20.0, 1.0, cfg.annotate.stroke_width, move |v| {
+            gb.config.update(|c| c.annotate.stroke_width = v)
+        }));
         let gb = outer.clone();
         g_ann.add(&entry_row("Font family", &cfg.annotate.font_family, move |v| gb.config.update(|c| c.annotate.font_family = v)));
         let gb = outer.clone();
-        g_ann.add(&spin_row("Font size", None, 6.0, 200.0, 1.0, cfg.annotate.font_size, move |v| gb.config.update(|c| c.annotate.font_size = v)));
-        let gb = outer.clone();
-        g_ann.add(&combo_row("Blur style", &["Pixelate", "Gaussian"], if cfg.annotate.blur_style == "gaussian" { 1 } else { 0 }, move |i| {
-            gb.config.update(|c| c.annotate.blur_style = if i == 1 { "gaussian".into() } else { "pixelate".into() })
+        g_ann.add(&spin_row("Font size", None, 6.0, 200.0, 1.0, cfg.annotate.font_size, move |v| {
+            gb.config.update(|c| c.annotate.font_size = v)
         }));
         let gb = outer.clone();
-        g_ann.add(&spin_row("Blur strength", None, 1.0, 20.0, 1.0, cfg.annotate.blur_strength, move |v| gb.config.update(|c| c.annotate.blur_strength = v)));
+        g_ann.add(&combo_row(
+            "Blur style",
+            &["Pixelate", "Gaussian"],
+            if cfg.annotate.blur_style == "gaussian" { 1 } else { 0 },
+            move |i| gb.config.update(|c| c.annotate.blur_style = if i == 1 { "gaussian".into() } else { "pixelate".into() }),
+        ));
+        let gb = outer.clone();
+        g_ann.add(&spin_row("Blur strength", None, 1.0, 20.0, 1.0, cfg.annotate.blur_strength, move |v| {
+            gb.config.update(|c| c.annotate.blur_strength = v)
+        }));
         let gb = outer.clone();
         g_ann.add(&entry_row("Watermark text", &cfg.annotate.watermark_text, move |v| gb.config.update(|c| c.annotate.watermark_text = v)));
     }
@@ -287,9 +346,19 @@ pub fn open(gb: &Rc<Omashot>) {
         let gb = outer.clone();
         g_hist.add(&switch_row("Record captures", None, cfg.history.enabled, move |v| gb.config.update(|c| c.history.enabled = v)));
         let gb = outer.clone();
-        g_hist.add(&spin_row("Retention (days)", Some("0 keeps entries forever; files on disk are never deleted"), 0.0, 3650.0, 1.0, cfg.history.retention_days as f64, move |v| gb.config.update(|c| c.history.retention_days = v as u32)));
+        g_hist.add(&spin_row(
+            "Retention (days)",
+            Some("0 keeps entries forever; files on disk are never deleted"),
+            0.0,
+            3650.0,
+            1.0,
+            cfg.history.retention_days as f64,
+            move |v| gb.config.update(|c| c.history.retention_days = v as u32),
+        ));
         let gb = outer.clone();
-        g_hist.add(&spin_row("Maximum entries", None, 0.0, 100_000.0, 50.0, cfg.history.max_entries as f64, move |v| gb.config.update(|c| c.history.max_entries = v as u32)));
+        g_hist.add(&spin_row("Maximum entries", None, 0.0, 100_000.0, 50.0, cfg.history.max_entries as f64, move |v| {
+            gb.config.update(|c| c.history.max_entries = v as u32)
+        }));
     }
     hist.add(&g_hist);
     let g_ocr = adw::PreferencesGroup::new();
@@ -298,7 +367,9 @@ pub fn open(gb: &Rc<Omashot>) {
         let gb = outer.clone();
         g_ocr.add(&entry_row("Tesseract languages", &cfg.ocr.languages, move |v| gb.config.update(|c| c.ocr.languages = v)));
         let gb = outer.clone();
-        g_ocr.add(&switch_row("Copy recognized text to clipboard", None, cfg.ocr.copy_to_clipboard, move |v| gb.config.update(|c| c.ocr.copy_to_clipboard = v)));
+        g_ocr.add(&switch_row("Copy recognized text to clipboard", None, cfg.ocr.copy_to_clipboard, move |v| {
+            gb.config.update(|c| c.ocr.copy_to_clipboard = v)
+        }));
     }
     hist.add(&g_ocr);
     add_page(&hist);
@@ -310,7 +381,15 @@ pub fn open(gb: &Rc<Omashot>) {
     let g_install = adw::PreferencesGroup::new();
     g_install.set_title("Install keybindings");
     g_install.set_description(Some("Adds a marked block to ~/.config/hypr/bindings.lua and reloads Hyprland. Nothing is written until you click Install; Remove takes exactly that block out again."));
-    let preset_row = combo_row("Preset", &["Super+I (area), Super+Shift+I (annotate)", "Print (replaces Omarchy's screenshot key), Shift+Print, Ctrl+Print, Super+Ctrl+Print"], 0, |_| {});
+    let preset_row = combo_row(
+        "Preset",
+        &[
+            "Super+I (area), Super+Shift+I (annotate)",
+            "Print (replaces Omarchy's screenshot key), Shift+Print, Ctrl+Print, Super+Ctrl+Print",
+        ],
+        0,
+        |_| {},
+    );
     g_install.add(&preset_row);
     let status_row = adw::ActionRow::new();
     status_row.set_title("Status");
@@ -355,7 +434,10 @@ pub fn open(gb: &Rc<Omashot>) {
             if taken.is_empty() || preset == crate::keybinds::Preset::Print {
                 do_install();
             } else {
-                let dialog = adw::AlertDialog::new(Some("Keys already bound"), Some(&format!("{}\n\nInstall anyway? Hyprland uses the last definition, so Omashot would win.", taken.join("\n"))));
+                let dialog = adw::AlertDialog::new(
+                    Some("Keys already bound"),
+                    Some(&format!("{}\n\nInstall anyway? Hyprland uses the last definition, so Omashot would win.", taken.join("\n"))),
+                );
                 dialog.add_responses(&[("cancel", "Cancel"), ("install", "Install anyway")]);
                 dialog.set_response_appearance("install", adw::ResponseAppearance::Suggested);
                 dialog.connect_response(None, move |_, resp| {
@@ -412,7 +494,10 @@ pub fn open(gb: &Rc<Omashot>) {
     let g_editor_keys = adw::PreferencesGroup::new();
     g_editor_keys.set_title("Editor keys");
     for (k, d) in [
-        ("V C R F O A L T H B S N W P", "Select, Crop, Rectangle, Filled, Oval, Arrow, Line, Text, Highlighter, Blur, Spotlight, Counter, Watermark, Pencil"),
+        (
+            "V C R F O A L T H B S N W P",
+            "Select, Crop, Rectangle, Filled, Oval, Arrow, Line, Text, Highlighter, Blur, Spotlight, Counter, Watermark, Pencil",
+        ),
         ("Ctrl+Z / Ctrl+Shift+Z", "Undo / redo"),
         ("Ctrl+S / Ctrl+Shift+C / Ctrl+E", "Save / copy and close / export as"),
         ("Ctrl+C, Ctrl+V, Ctrl+D, Ctrl+A", "Copy, paste, duplicate, select all annotations"),

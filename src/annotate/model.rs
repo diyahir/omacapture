@@ -72,13 +72,6 @@ impl RectF {
     pub fn intersects(&self, o: &RectF) -> bool {
         self.x < o.right() && o.x < self.right() && self.y < o.bottom() && o.y < self.bottom()
     }
-    pub fn intersect(&self, o: &RectF) -> Option<RectF> {
-        let x = self.x.max(o.x);
-        let y = self.y.max(o.y);
-        let r = self.right().min(o.right());
-        let b = self.bottom().min(o.bottom());
-        (r > x && b > y).then(|| RectF::new(x, y, r - x, b - y))
-    }
     pub fn translate(&self, dx: f64, dy: f64) -> RectF {
         RectF::new(self.x + dx, self.y + dy, self.w, self.h)
     }
@@ -130,13 +123,16 @@ impl Color {
     /// A readable text color on top of this color.
     pub fn contrast(&self) -> Color {
         let lum = 0.2126 * self.r + 0.7152 * self.g + 0.0722 * self.b;
-        if lum > 0.55 { Color::rgba(0.05, 0.05, 0.05, 1.0) } else { Color::rgba(1.0, 1.0, 1.0, 1.0) }
+        if lum > 0.55 {
+            Color::rgba(0.05, 0.05, 0.05, 1.0)
+        } else {
+            Color::rgba(1.0, 1.0, 1.0, 1.0)
+        }
     }
 }
 
-pub const PALETTE: [&str; 10] = [
-    "#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#00c7be", "#007aff", "#af52de", "#ff2d55", "#ffffff", "#000000",
-];
+pub const PALETTE: [&str; 10] =
+    ["#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#00c7be", "#007aff", "#af52de", "#ff2d55", "#ffffff", "#000000"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -286,9 +282,11 @@ impl Item {
     /// Axis-aligned bounds used for hit testing and selection handles.
     pub fn bounds(&self) -> RectF {
         match &self.kind {
-            Kind::Rect { rect, .. } | Kind::Oval { rect } | Kind::Blur { rect, .. } | Kind::Spotlight { rect } | Kind::Watermark { rect, .. } => {
-                rect.normalized()
-            }
+            Kind::Rect { rect, .. }
+            | Kind::Oval { rect }
+            | Kind::Blur { rect, .. }
+            | Kind::Spotlight { rect }
+            | Kind::Watermark { rect, .. } => rect.normalized(),
             Kind::Line { a, b } => RectF::from_points(*a, *b),
             Kind::Arrow { a, b, ctrl, .. } => {
                 let mut r = RectF::from_points(*a, *b);
@@ -307,17 +305,16 @@ impl Item {
     }
 
     pub fn is_resizable(&self) -> bool {
-        matches!(
-            self.kind,
-            Kind::Rect { .. } | Kind::Oval { .. } | Kind::Blur { .. } | Kind::Spotlight { .. } | Kind::Watermark { .. }
-        )
+        matches!(self.kind, Kind::Rect { .. } | Kind::Oval { .. } | Kind::Blur { .. } | Kind::Spotlight { .. } | Kind::Watermark { .. })
     }
 
     pub fn translate(&mut self, dx: f64, dy: f64) {
         match &mut self.kind {
-            Kind::Rect { rect, .. } | Kind::Oval { rect } | Kind::Blur { rect, .. } | Kind::Spotlight { rect } | Kind::Watermark { rect, .. } => {
-                *rect = rect.translate(dx, dy)
-            }
+            Kind::Rect { rect, .. }
+            | Kind::Oval { rect }
+            | Kind::Blur { rect, .. }
+            | Kind::Spotlight { rect }
+            | Kind::Watermark { rect, .. } => *rect = rect.translate(dx, dy),
             Kind::Line { a, b } => {
                 *a = a.offset(dx, dy);
                 *b = b.offset(dx, dy);
@@ -347,9 +344,11 @@ impl Item {
     /// Replace the rectangle of a rect-like item (used by resize handles).
     pub fn set_rect(&mut self, r: RectF) {
         match &mut self.kind {
-            Kind::Rect { rect, .. } | Kind::Oval { rect } | Kind::Blur { rect, .. } | Kind::Spotlight { rect } | Kind::Watermark { rect, .. } => {
-                *rect = r
-            }
+            Kind::Rect { rect, .. }
+            | Kind::Oval { rect }
+            | Kind::Blur { rect, .. }
+            | Kind::Spotlight { rect }
+            | Kind::Watermark { rect, .. } => *rect = r,
             _ => {}
         }
     }
@@ -375,18 +374,25 @@ pub fn points_bounds(points: &[Pt]) -> RectF {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum Background {
+    #[default]
     None,
-    Solid { color: Color },
-    Gradient { from: Color, to: Color, angle: f64 },
-    Blurred { strength: f64, dim: f64 },
-    Image { path: std::path::PathBuf },
-}
-
-impl Default for Background {
-    fn default() -> Self {
-        Background::None
-    }
+    Solid {
+        color: Color,
+    },
+    Gradient {
+        from: Color,
+        to: Color,
+        angle: f64,
+    },
+    Blurred {
+        strength: f64,
+        dim: f64,
+    },
+    Image {
+        path: std::path::PathBuf,
+    },
 }
 
 pub const GRADIENTS: [(&str, &str, &str); 8] = [

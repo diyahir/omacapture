@@ -48,7 +48,11 @@ pub fn is_sensitive(token: &str) -> bool {
     let phone_chars = t.chars().all(|c| c.is_ascii_digit() || " +()-.".contains(c));
     let formatted = t.starts_with('+') || t.contains('(') || t.contains(' ') || t.contains('.');
     let looks_like_date = t.matches('-').count() == 2 && digits.len() == 8;
-    if phone_chars && !looks_like_date && ((formatted && (10..=15).contains(&digits.len())) || (t.chars().all(|c| c.is_ascii_digit()) && (10..=11).contains(&digits.len()))) {
+    if phone_chars
+        && !looks_like_date
+        && ((formatted && (10..=15).contains(&digits.len()))
+            || (t.chars().all(|c| c.is_ascii_digit()) && (10..=11).contains(&digits.len())))
+    {
         return true;
     }
     if digits.len() >= 13 && t.chars().all(|c| c.is_ascii_digit() || c == ' ' || c == '-') && luhn(&digits) {

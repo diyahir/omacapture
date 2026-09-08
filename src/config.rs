@@ -23,13 +23,6 @@ impl ImageFormat {
             ImageFormat::Webp => "webp",
         }
     }
-    pub fn mime(self) -> &'static str {
-        match self {
-            ImageFormat::Png => "image/png",
-            ImageFormat::Jpg => "image/jpeg",
-            ImageFormat::Webp => "image/webp",
-        }
-    }
 }
 
 /// What happens after a capture finishes, per capture mode.
@@ -72,13 +65,9 @@ impl Default for General {
     fn default() -> Self {
         Self {
             // Follow Omarchy's own screenshot tooling when it is configured.
-            save_folder: std::env::var_os("OMARCHY_SCREENSHOT_DIR")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| {
-                    dirs::picture_dir()
-                        .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Pictures"))
-                        .join("Screenshots")
-                }),
+            save_folder: std::env::var_os("OMARCHY_SCREENSHOT_DIR").map(PathBuf::from).unwrap_or_else(|| {
+                dirs::picture_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Pictures")).join("Screenshots")
+            }),
             filename_pattern: "Screenshot %Y-%m-%d at %H.%M.%S".into(),
             format: ImageFormat::Png,
             quality: 90,
@@ -319,7 +308,11 @@ impl ConfigHandle {
             if is_config
                 && matches!(
                     event,
-                    gio::FileMonitorEvent::ChangesDoneHint | gio::FileMonitorEvent::Changed | gio::FileMonitorEvent::Created | gio::FileMonitorEvent::MovedIn | gio::FileMonitorEvent::Renamed
+                    gio::FileMonitorEvent::ChangesDoneHint
+                        | gio::FileMonitorEvent::Changed
+                        | gio::FileMonitorEvent::Created
+                        | gio::FileMonitorEvent::MovedIn
+                        | gio::FileMonitorEvent::Renamed
                 )
             {
                 let h = handle.clone();

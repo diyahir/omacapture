@@ -82,7 +82,6 @@ pub fn run() -> glib::ExitCode {
     app.run()
 }
 
-
 pub fn dispatch(gb: &Rc<Omashot>, cmd: Command) {
     tracing::debug!("dispatch {cmd:?}");
     match cmd {
@@ -211,26 +210,24 @@ fn capture_ocr(gb: &Rc<Omashot>) {
         std::thread::spawn(move || {
             let _ = tx.send(crate::ocr::recognize(&png, &langs));
         });
-        glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
-            match rx.try_recv() {
-                Ok(Ok(text)) => {
-                    let preview: String = text.chars().take(160).collect();
-                    if cfg.ocr.copy_to_clipboard {
-                        let _ = crate::clipboard::copy_text(&text);
-                    }
-                    let title = if text.is_empty() { "No text found" } else { "Text copied to clipboard" };
-                    crate::notify::send(app.upcast_ref::<gtk::Application>(), "ocr", title, &preview, None);
-                    hold.borrow_mut().take();
-                    glib::ControlFlow::Break
+        glib::timeout_add_local(std::time::Duration::from_millis(50), move || match rx.try_recv() {
+            Ok(Ok(text)) => {
+                let preview: String = text.chars().take(160).collect();
+                if cfg.ocr.copy_to_clipboard {
+                    let _ = crate::clipboard::copy_text(&text);
                 }
-                Ok(Err(e)) => {
-                    crate::notify::send(app.upcast_ref::<gtk::Application>(), "ocr", "OCR failed", &e.to_string(), None);
-                    hold.borrow_mut().take();
-                    glib::ControlFlow::Break
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
-                Err(_) => glib::ControlFlow::Break,
+                let title = if text.is_empty() { "No text found" } else { "Text copied to clipboard" };
+                crate::notify::send(app.upcast_ref::<gtk::Application>(), "ocr", title, &preview, None);
+                hold.borrow_mut().take();
+                glib::ControlFlow::Break
             }
+            Ok(Err(e)) => {
+                crate::notify::send(app.upcast_ref::<gtk::Application>(), "ocr", "OCR failed", &e.to_string(), None);
+                hold.borrow_mut().take();
+                glib::ControlFlow::Break
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(_) => glib::ControlFlow::Break,
         });
     });
 }

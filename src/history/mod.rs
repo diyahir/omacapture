@@ -53,10 +53,8 @@ impl History {
     }
 
     pub fn set_session(&self, path: &Path, session: &Path) -> Result<()> {
-        self.conn.execute(
-            "UPDATE captures SET session_path = ?1 WHERE path = ?2",
-            params![session.to_string_lossy(), path.to_string_lossy()],
-        )?;
+        self.conn
+            .execute("UPDATE captures SET session_path = ?1 WHERE path = ?2", params![session.to_string_lossy(), path.to_string_lossy()])?;
         Ok(())
     }
 
@@ -103,12 +101,7 @@ impl History {
             )?;
         }
         // Forget files the user deleted elsewhere.
-        let stale: Vec<i64> = self
-            .list("", 10_000)?
-            .into_iter()
-            .filter(|e| !e.path.exists())
-            .map(|e| e.id)
-            .collect();
+        let stale: Vec<i64> = self.list("", 10_000)?.into_iter().filter(|e| !e.path.exists()).map(|e| e.id).collect();
         for id in stale {
             self.delete(id)?;
         }

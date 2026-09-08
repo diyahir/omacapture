@@ -53,8 +53,12 @@ pub fn conflicts(preset: Preset) -> Vec<String> {
         Preset::SuperI => &[("I", 64), ("I", 65)],
         Preset::Print => &[("PRINT", 0), ("PRINT", 1), ("PRINT", 4), ("PRINT", 68)],
     };
-    let Ok(out) = std::process::Command::new("hyprctl").args(["binds", "-j"]).output() else { return Vec::new() };
-    let Ok(binds) = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout) else { return Vec::new() };
+    let Ok(out) = std::process::Command::new("hyprctl").args(["binds", "-j"]).output() else {
+        return Vec::new();
+    };
+    let Ok(binds) = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout) else {
+        return Vec::new();
+    };
     let mut found = Vec::new();
     for b in binds {
         let key = b.get("key").and_then(|k| k.as_str()).unwrap_or("").to_ascii_uppercase();
@@ -137,7 +141,11 @@ pub fn remove(file: &Path, reload: bool) -> Result<bool> {
 }
 
 fn reload_hyprland() -> Result<()> {
-    let status = std::process::Command::new("hyprctl").arg("reload").stdout(std::process::Stdio::null()).status().context("running hyprctl reload")?;
+    let status = std::process::Command::new("hyprctl")
+        .arg("reload")
+        .stdout(std::process::Stdio::null())
+        .status()
+        .context("running hyprctl reload")?;
     if !status.success() {
         bail!("hyprctl reload failed");
     }
@@ -211,7 +219,10 @@ pub fn run(cmd: KeybindsCommand) -> Result<()> {
             println!("{}: {}", file.display(), if is_installed(&file) { "Omashot block present" } else { "no Omashot block" });
             for preset in [Preset::SuperI, Preset::Print] {
                 let taken = conflicts(preset);
-                println!("{preset:?}: {}", if taken.is_empty() { "keys free".to_string() } else { format!("taken by {}", taken.join(", ")) });
+                println!(
+                    "{preset:?}: {}",
+                    if taken.is_empty() { "keys free".to_string() } else { format!("taken by {}", taken.join(", ")) }
+                );
             }
         }
     }

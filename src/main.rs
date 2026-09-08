@@ -1,18 +1,19 @@
 #![recursion_limit = "512"]
+#![allow(clippy::type_complexity, clippy::too_many_arguments, clippy::wrong_self_convention)]
+mod annotate;
 mod app;
 mod capture;
 mod clipboard;
 mod config;
 mod export;
 mod history;
+mod keybinds;
+mod mcp;
 mod notify;
 mod ocr;
 mod paths;
 mod postcapture;
 mod quickaccess;
-mod annotate;
-mod keybinds;
-mod mcp;
 mod theme;
 
 use clap::{Parser, Subcommand};
@@ -80,11 +81,17 @@ pub fn normalize_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Vec
 fn main() -> glib::ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("omashot=info")),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("omashot=info")),
         )
         .with_writer(std::io::stderr)
         .init();
+    // Help and version must work without a display.
+    if let Err(e) = Cli::try_parse_from(normalize_args(std::env::args_os())) {
+        if matches!(e.kind(), clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion) {
+            let _ = e.print();
+            return glib::ExitCode::SUCCESS;
+        }
+    }
     // Headless subcommands never touch GTK.
     if let Ok(cli) = Cli::try_parse_from(normalize_args(std::env::args_os())) {
         if matches!(cli.command, Some(Command::Mcp)) {
