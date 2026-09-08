@@ -210,6 +210,9 @@ impl Renderer {
                 let (sw, sh) = (surf.width() as f64, surf.height() as f64);
                 let scale = (w / sw).max(h / sh);
                 cr.save().ok();
+                // The cover-scaled surface overhangs the frame; never paint outside it.
+                cr.rectangle(0.0, 0.0, w, h);
+                cr.clip();
                 cr.translate((w - sw * scale) / 2.0, (h - sh * scale) / 2.0);
                 cr.scale(scale, scale);
                 cr.set_source_surface(surf, 0.0, 0.0).ok();
@@ -226,6 +229,8 @@ impl Renderer {
                     let surf = rgba_to_surface(&img);
                     let s = (w / img.width() as f64).max(h / img.height() as f64);
                     cr.save().ok();
+                    cr.rectangle(0.0, 0.0, w, h);
+                    cr.clip();
                     cr.translate((w - img.width() as f64 * s) / 2.0, (h - img.height() as f64 * s) / 2.0);
                     cr.scale(s, s);
                     cr.set_source_surface(&surf, 0.0, 0.0).ok();
