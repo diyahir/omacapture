@@ -85,6 +85,13 @@ fn main() -> glib::ExitCode {
         )
         .with_writer(std::io::stderr)
         .init();
+    // Help and version must work without a display.
+    if let Err(e) = Cli::try_parse_from(normalize_args(std::env::args_os())) {
+        if matches!(e.kind(), clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion) {
+            let _ = e.print();
+            return glib::ExitCode::SUCCESS;
+        }
+    }
     // Headless subcommands never touch GTK.
     if let Ok(cli) = Cli::try_parse_from(normalize_args(std::env::args_os())) {
         if matches!(cli.command, Some(Command::Mcp)) {
