@@ -363,19 +363,7 @@ impl Canvas {
                 let shadow = doc.sheet.canvas.shadow;
                 let (ix, iy) = (crop.x - ox, crop.y - oy);
                 if shadow > 0.0 {
-                    for i in 0..10 {
-                        let spread = 16.0 * (1.0 - i as f64 / 10.0);
-                        cr.set_source_rgba(0.0, 0.0, 0.0, shadow * 0.08);
-                        render::rounded_rect(
-                            cr,
-                            ix - spread,
-                            iy - spread + 8.0,
-                            crop.w + spread * 2.0,
-                            crop.h + spread * 2.0,
-                            radius + spread,
-                        );
-                        cr.fill().ok();
-                    }
+                    render::draw_shadow(cr, ix, iy, crop.w, crop.h, radius, shadow);
                 }
                 cr.restore().ok();
                 cr.save().ok();

@@ -369,6 +369,36 @@ pub fn open(gb: &Rc<Omacapture>) {
         }));
         let gb = outer.clone();
         g_ann.add(&entry_row("Watermark text", &cfg.annotate.watermark_text, move |v| gb.config.update(|c| c.annotate.watermark_text = v)));
+        let gb = outer.clone();
+        let sel = match cfg.annotate.default_background.as_str() {
+            "wallpaper" => 1,
+            "blurred" => 2,
+            _ => 0,
+        };
+        g_ann.add(&combo_row(
+            "Frame new captures with",
+            &["Nothing", "Blurred Omarchy wallpaper", "Blurred copy of the capture"],
+            sel,
+            move |i| {
+                gb.config.update(|c| {
+                    c.annotate.default_background = match i {
+                        1 => "wallpaper".into(),
+                        2 => "blurred".into(),
+                        _ => "none".into(),
+                    }
+                })
+            },
+        ));
+        let gb = outer.clone();
+        g_ann.add(&spin_row(
+            "Frame padding",
+            Some("Pixels of background around the capture; 0 picks it from the capture size"),
+            0.0,
+            512.0,
+            8.0,
+            cfg.annotate.default_padding,
+            move |v| gb.config.update(|c| c.annotate.default_padding = v),
+        ));
     }
     ann.add(&g_ann);
     add_page(&ann);

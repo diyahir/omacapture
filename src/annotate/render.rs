@@ -10,6 +10,9 @@ pub struct Renderer {
     pub base: cairo::ImageSurface,
     blur_cache: HashMap<(u64, i64, i64, i64, i64, BlurEffect, i64), cairo::ImageSurface>,
     blurred_bg_cache: Option<(i64, cairo::ImageSurface)>,
+    wallpaper_cache: Option<(i64, cairo::ImageSurface)>,
+    /// Wallpaper resized to ~1280 px once; blurring this is the only per-strength work.
+    wallpaper_base: Option<image::RgbaImage>,
 }
 
 #[derive(Default)]
@@ -22,12 +25,20 @@ pub struct DrawOptions<'a> {
 
 impl Renderer {
     pub fn new(source: &Frame) -> Self {
-        Self { base: source.to_cairo_surface(), blur_cache: HashMap::new(), blurred_bg_cache: None }
+        Self {
+            base: source.to_cairo_surface(),
+            blur_cache: HashMap::new(),
+            blurred_bg_cache: None,
+            wallpaper_cache: None,
+            wallpaper_base: None,
+        }
     }
 
     pub fn invalidate(&mut self) {
         self.blur_cache.clear();
         self.blurred_bg_cache = None;
+        self.wallpaper_cache = None;
+        self.wallpaper_base = None;
     }
 
     /// Draw the image plus every annotation in image coordinates.
@@ -183,12 +194,59 @@ impl Renderer {
                 cr.rectangle(0.0, 0.0, w, h);
                 cr.fill().ok();
             }
+            Background::Wallpaper { strength, dim } => {
+                let key = (*strength * 10.0) as i64;
+                if self.wallpaper_cache.as_ref().map(|c| c.0) != Some(key) {
+                    if self.wallpaper_base.is_none() {
+                        self.wallpaper_base = crate::theme::wallpaper_path().and_then(|p| image::open(p).ok()).map(|img| {
+                            // Keep enough resolution that the wallpaper stays recognizable.
+                            let rgba = img.to_rgba8();
+                            let (iw, ih) = (rgba.width().max(1), rgba.height().max(1));
+                            let tw = iw.min(1280);
+                            let th = (ih as f64 * tw as f64 / iw as f64).round().max(1.0) as u32;
+                            image::imageops::resize(&rgba, tw, th, image::imageops::FilterType::Triangle)
+                        });
+                    }
+                    match &self.wallpaper_base {
+                        // strength 1-20 maps to a gentle 2-40 px blur at ~1280 px wide.
+                        Some(base) => {
+                            let blurred = effects::gaussian(base, (strength * 2.0).clamp(1.0, 40.0) as u32);
+                            self.wallpaper_cache = Some((key, rgba_to_surface(&blurred)));
+                        }
+                        None => {
+                            // No wallpaper available: fall back to a neutral dark field.
+                            cr.set_source_rgb(0.12, 0.12, 0.13);
+                            cr.rectangle(0.0, 0.0, w, h);
+                            cr.fill().ok();
+                            return;
+                        }
+                    }
+                }
+                let surf = &self.wallpaper_cache.as_ref().unwrap().1;
+                let (sw, sh) = (surf.width() as f64, surf.height() as f64);
+                let scale = (w / sw).max(h / sh);
+                cr.save().ok();
+                // The cover-scaled surface overhangs the frame; never paint outside it.
+                cr.rectangle(0.0, 0.0, w, h);
+                cr.clip();
+                cr.translate((w - sw * scale) / 2.0, (h - sh * scale) / 2.0);
+                cr.scale(scale, scale);
+                cr.set_source_surface(surf, 0.0, 0.0).ok();
+                cr.source().set_filter(cairo::Filter::Bilinear);
+                cr.paint().ok();
+                cr.restore().ok();
+                cr.set_source_rgba(0.0, 0.0, 0.0, dim.clamp(0.0, 1.0));
+                cr.rectangle(0.0, 0.0, w, h);
+                cr.fill().ok();
+            }
             Background::Image { path } => {
                 if let Ok(img) = image::open(path) {
                     let img = img.to_rgba8();
                     let surf = rgba_to_surface(&img);
                     let s = (w / img.width() as f64).max(h / img.height() as f64);
                     cr.save().ok();
+                    cr.rectangle(0.0, 0.0, w, h);
+                    cr.clip();
                     cr.translate((w - img.width() as f64 * s) / 2.0, (h - img.height() as f64 * s) / 2.0);
                     cr.scale(s, s);
                     cr.set_source_surface(&surf, 0.0, 0.0).ok();
@@ -204,15 +262,32 @@ impl Renderer {
     }
 }
 
-fn draw_shadow(cr: &cairo::Context, x: f64, y: f64, w: f64, h: f64, radius: f64, intensity: f64) {
-    let steps = 12;
+/// Drop shadow cast down and to the right, like a lit sheet: the shadow only
+/// appears past the bottom and right edges, with a soft falloff.
+pub fn draw_shadow(cr: &cairo::Context, x: f64, y: f64, w: f64, h: f64, radius: f64, intensity: f64) {
+    let steps = 14;
+    let offset = 10.0 + 22.0 * intensity;
+    cr.save().ok();
+    // Never darken the image area itself or the top/left sides.
+    cr.set_fill_rule(cairo::FillRule::EvenOdd);
+    cr.rectangle(x - 1.0, y - 1.0, w + offset + 40.0, h + offset + 40.0);
+    rounded_rect(cr, x, y, w, h, radius);
+    cr.clip();
     for i in 0..steps {
         let t = i as f64 / steps as f64;
-        let spread = 18.0 * (1.0 - t);
-        cr.set_source_rgba(0.0, 0.0, 0.0, intensity * 0.08);
-        rounded_rect(cr, x - spread, y - spread + 8.0, w + spread * 2.0, h + spread * 2.0, radius + spread);
+        let spread = offset * (1.0 - t);
+        cr.set_source_rgba(0.0, 0.0, 0.0, intensity * 0.09);
+        rounded_rect(
+            cr,
+            x + offset * 0.55 - spread * 0.35,
+            y + offset * 0.55 - spread * 0.35,
+            w + spread * 0.7,
+            h + spread * 0.7,
+            radius + spread * 0.5,
+        );
         cr.fill().ok();
     }
+    cr.restore().ok();
 }
 
 pub fn set_color(cr: &cairo::Context, c: &Color) {

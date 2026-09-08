@@ -242,6 +242,10 @@ pub struct Annotate {
     pub auto_redact: bool,
     pub watermark_text: String,
     pub watermark_image: Option<PathBuf>,
+    /// Frame new captures in the editor: "none", "wallpaper" (the Omarchy frame), or "blurred".
+    pub default_background: String,
+    /// Padding for that frame; 0 lets the preset pick from the capture size.
+    pub default_padding: f64,
 }
 
 impl Default for Annotate {
@@ -260,6 +264,8 @@ impl Default for Annotate {
             auto_redact: false,
             watermark_text: String::new(),
             watermark_image: None,
+            default_background: "none".into(),
+            default_padding: 0.0,
         }
     }
 }
@@ -469,6 +475,12 @@ impl Config {
             anyhow::bail!("general.delay_ms must be at most 60000");
         }
         self.quick_access.shortcuts.validate()?;
+        if !matches!(self.annotate.default_background.as_str(), "none" | "wallpaper" | "blurred") {
+            anyhow::bail!("annotate.default_background must be none, wallpaper, or blurred");
+        }
+        if !(0.0..=1024.0).contains(&self.annotate.default_padding) {
+            anyhow::bail!("annotate.default_padding must be 0-1024");
+        }
         Ok(())
     }
 }

@@ -393,6 +393,11 @@ pub enum Background {
     Image {
         path: std::path::PathBuf,
     },
+    /// The current Omarchy wallpaper, blurred, framing the screenshot.
+    Wallpaper {
+        strength: f64,
+        dim: f64,
+    },
 }
 
 pub const GRADIENTS: [(&str, &str, &str); 8] = [
@@ -424,6 +429,20 @@ impl Default for Canvas {
 }
 
 impl Canvas {
+    /// The one-click "Omarchy frame": the current wallpaper, lightly blurred,
+    /// as an even border around the capture with a drop shadow.
+    pub fn omarchy_frame(capture_w: f64, capture_h: f64) -> Canvas {
+        // Padding relative to the capture so small and large shots frame alike,
+        // and the same on all four sides: the frame keeps the capture's shape and
+        // the wallpaper is cropped to fill it.
+        let padding = (capture_w.max(capture_h) * 0.05).clamp(16.0, 320.0);
+        Canvas { background: Background::Wallpaper { strength: 3.0, dim: 0.12 }, padding, corner_radius: 0.0, shadow: 0.55, aspect: None }
+    }
+
+    pub fn is_omarchy_frame(&self) -> bool {
+        matches!(self.background, Background::Wallpaper { .. })
+    }
+
     pub fn is_plain(&self) -> bool {
         self.background == Background::None && self.padding <= 0.0 && self.corner_radius <= 0.0 && self.aspect.is_none()
     }

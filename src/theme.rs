@@ -61,6 +61,14 @@ pub fn colors_path() -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.exists())
 }
 
+/// The wallpaper Omarchy currently shows, if the state directory exposes it.
+pub fn wallpaper_path() -> Option<PathBuf> {
+    let state = dirs::state_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join(".local/state"));
+    let link = state.join("omarchy/current/background");
+    let target = std::fs::canonicalize(&link).ok()?;
+    target.is_file().then_some(target)
+}
+
 pub fn load() -> Option<ThemeColors> {
     let text = std::fs::read_to_string(colors_path()?).ok()?;
     toml::from_str(&text).ok()

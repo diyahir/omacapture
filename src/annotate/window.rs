@@ -21,6 +21,7 @@ pub struct EditorWindow {
     sidebar: Sidebar,
     tool_buttons: RefCell<Vec<(Tool, gtk::ToggleButton)>>,
     zoom_label: gtk::Label,
+    frame_btn: gtk::ToggleButton,
     undo_btn: gtk::Button,
     redo_btn: gtk::Button,
     words: RefCell<Option<Vec<crate::ocr::Word>>>,
@@ -144,8 +145,27 @@ impl EditorWindow {
         };
 
         let canvas = Canvas::new(frame, style, options);
-        if let Some(sheet) = sheet {
-            canvas.state.borrow_mut().doc.sheet = sheet;
+        match sheet {
+            Some(sheet) => canvas.state.borrow_mut().doc.sheet = sheet,
+            None => {
+                // Fresh capture: apply the configured default frame, if any.
+                let mut st = canvas.state.borrow_mut();
+                match cfg.annotate.default_background.as_str() {
+                    "wallpaper" => {
+                        let (w, h) = (st.doc.width(), st.doc.height());
+                        st.doc.sheet.canvas = super::model::Canvas::omarchy_frame(w, h);
+                        if cfg.annotate.default_padding > 0.0 {
+                            st.doc.sheet.canvas.padding = cfg.annotate.default_padding;
+                        }
+                    }
+                    "blurred" => {
+                        st.doc.sheet.canvas.background = Background::Blurred { strength: 8.0, dim: 0.15 };
+                        st.doc.sheet.canvas.padding = cfg.annotate.default_padding;
+                        st.doc.sheet.canvas.corner_radius = 12.0;
+                    }
+                    _ => {}
+                }
+            }
         }
 
         let win = adw::ApplicationWindow::builder()
@@ -174,6 +194,14 @@ impl EditorWindow {
         header.pack_start(&undo_btn);
         header.pack_start(&redo_btn);
 
+        let frame_btn = gtk::ToggleButton::new();
+        let frame_content = adw::ButtonContent::new();
+        frame_content.set_icon_name("image-x-generic-symbolic");
+        frame_content.set_label("Omarchy frame");
+        frame_btn.set_child(Some(&frame_content));
+        frame_btn.set_tooltip_text(Some("Frame the capture with your blurred Omarchy wallpaper (Ctrl+Shift+F)"));
+        frame_btn.add_css_class("flat");
+        header.pack_end(&frame_btn);
         let sidebar_btn = gtk::ToggleButton::new();
         sidebar_btn.set_icon_name("sidebar-show-right-symbolic");
         sidebar_btn.set_tooltip_text(Some("Canvas & background (Ctrl+B)"));
@@ -217,6 +245,7 @@ impl EditorWindow {
             sidebar,
             tool_buttons: RefCell::new(Vec::new()),
             zoom_label: zoom_label.clone(),
+            frame_btn: frame_btn.clone(),
             undo_btn: undo_btn.clone(),
             redo_btn: redo_btn.clone(),
             words: RefCell::new(None),
@@ -368,6 +397,12 @@ impl EditorWindow {
         {
             let t = this.clone();
             sidebar_btn.connect_toggled(move |b| t.sidebar.revealer.set_reveal_child(b.is_active()));
+            let t = this.clone();
+            frame_btn.connect_toggled(move |b| {
+                if !t.updating.get() {
+                    t.set_omarchy_frame(b.is_active());
+                }
+            });
         }
 
         // Context menu on the canvas.
@@ -869,7 +904,7 @@ impl EditorWindow {
         title.set_xalign(0.0);
         outer.append(&title);
 
-        let bg_kind = dropdown(&["No background", "Gradient", "Solid color", "Blurred image", "Image file"]);
+        let bg_kind = dropdown(&["No background", "Omarchy wallpaper (blurred)", "Gradient", "Solid color", "Blurred image", "Image file"]);
         outer.append(&labeled_v("Background", &bg_kind));
         let gradients = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         gradients.set_halign(gtk::Align::Start);
@@ -922,8 +957,22 @@ impl EditorWindow {
             sb.bg_kind.connect_selected_notify(move |_| t.apply_background());
             let t = self.clone();
             sb.solid.connect_rgba_notify(move |_| t.apply_background());
+            // Re-blurring the wallpaper is the one expensive canvas edit: coalesce
+            // slider ticks and apply once the drag has paused.
             let t = self.clone();
-            sb.blur_strength.connect_value_changed(move |_| t.apply_background());
+            let pending: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+            sb.blur_strength.connect_value_changed(move |_| {
+                if let Some(id) = pending.borrow_mut().take() {
+                    id.remove();
+                }
+                let t2 = t.clone();
+                let p2 = pending.clone();
+                let id = glib::timeout_add_local_once(std::time::Duration::from_millis(120), move || {
+                    *p2.borrow_mut() = None;
+                    t2.apply_background();
+                });
+                *pending.borrow_mut() = Some(id);
+            });
             let t = self.clone();
             sb.image_btn.connect_clicked(move |_| {
                 let dialog = gtk::FileDialog::new();
@@ -932,7 +981,7 @@ impl EditorWindow {
                 dialog.open(Some(&t.win), gio::Cancellable::NONE, move |res| {
                     if let Ok(file) = res {
                         if let Some(path) = file.path() {
-                            t2.sidebar.bg_kind.set_selected(4);
+                            t2.sidebar.bg_kind.set_selected(5);
                             t2.canvas.update_canvas("bg", move |c| c.background = Background::Image { path });
                         }
                     }
@@ -951,7 +1000,7 @@ impl EditorWindow {
                     let (_, a, b) = GRADIENTS[i.min(GRADIENTS.len() - 1)];
                     btn.connect_clicked(move |_| {
                         t.updating.set(true);
-                        t.sidebar.bg_kind.set_selected(1);
+                        t.sidebar.bg_kind.set_selected(2);
                         t.updating.set(false);
                         let (from, to) = (Color::parse(a).unwrap(), Color::parse(b).unwrap());
                         t.canvas.update_canvas("bg", move |c| {
@@ -1015,9 +1064,36 @@ impl EditorWindow {
             return;
         }
         let sb = &self.sidebar;
+        // Wallpaper and blurred backgrounds keep their other settings when only the
+        // blur strength changes; the picker re-applies the full preset.
+        let current = self.canvas.state.borrow().doc.sheet.canvas.background.clone();
+        let strength = sb.blur_strength.value();
+        match (sb.bg_kind.selected(), &current) {
+            (1, Background::Wallpaper { .. }) => {
+                self.canvas.update_canvas("blur", move |c| {
+                    if let Background::Wallpaper { strength: s, .. } = &mut c.background {
+                        *s = strength;
+                    }
+                });
+                return;
+            }
+            (4, Background::Blurred { .. }) => {
+                self.canvas.update_canvas("blur", move |c| {
+                    if let Background::Blurred { strength: s, .. } = &mut c.background {
+                        *s = strength;
+                    }
+                });
+                return;
+            }
+            _ => {}
+        }
         let bg = match sb.bg_kind.selected() {
             0 => Background::None,
             1 => {
+                self.set_omarchy_frame(true);
+                return;
+            }
+            2 => {
                 let cur = self.canvas.state.borrow().doc.sheet.canvas.background.clone();
                 match cur {
                     Background::Gradient { .. } => cur,
@@ -1027,8 +1103,8 @@ impl EditorWindow {
                     }
                 }
             }
-            2 => Background::Solid { color: Color::from_gdk(&sb.solid.rgba()) },
-            3 => Background::Blurred { strength: sb.blur_strength.value(), dim: 0.15 },
+            3 => Background::Solid { color: Color::from_gdk(&sb.solid.rgba()) },
+            4 => Background::Blurred { strength: sb.blur_strength.value(), dim: 0.15 },
             _ => {
                 let cur = self.canvas.state.borrow().doc.sheet.canvas.background.clone();
                 match cur {
@@ -1044,6 +1120,19 @@ impl EditorWindow {
                 c.padding = 48.0;
             }
         });
+    }
+
+    /// One-click frame: the whole wallpaper behind the capture, or back to plain.
+    pub fn set_omarchy_frame(&self, on: bool) {
+        let (w, h) = {
+            let st = self.canvas.state.borrow();
+            let r = st.doc.crop_rect();
+            (r.w, r.h)
+        };
+        self.canvas.update_canvas("frame", move |c| {
+            *c = if on { super::model::Canvas::omarchy_frame(w, h) } else { super::model::Canvas::default() };
+        });
+        self.canvas.zoom_fit();
     }
 
     // ----- refresh UI from state -----
@@ -1195,14 +1284,19 @@ impl EditorWindow {
         let c = &s.doc.sheet.canvas;
         self.sidebar.bg_kind.set_selected(match c.background {
             Background::None => 0,
-            Background::Gradient { .. } => 1,
-            Background::Solid { .. } => 2,
-            Background::Blurred { .. } => 3,
-            Background::Image { .. } => 4,
+            Background::Wallpaper { .. } => 1,
+            Background::Gradient { .. } => 2,
+            Background::Solid { .. } => 3,
+            Background::Blurred { .. } => 4,
+            Background::Image { .. } => 5,
         });
+        self.frame_btn.set_active(c.is_omarchy_frame());
         self.sidebar.padding.set_value(c.padding);
         self.sidebar.radius.set_value(c.corner_radius);
         self.sidebar.shadow.set_value(c.shadow);
+        if let Background::Wallpaper { strength, .. } | Background::Blurred { strength, .. } = &c.background {
+            self.sidebar.blur_strength.set_value(*strength);
+        }
         drop(s);
         self.updating.set(false);
     }
@@ -1257,6 +1351,10 @@ impl EditorWindow {
                     gdk::Key::_0 | gdk::Key::KP_0 => t.canvas.zoom_fit(),
                     gdk::Key::_1 | gdk::Key::KP_1 => t.canvas.zoom_actual(),
                     gdk::Key::e => t.export_as(),
+                    gdk::Key::f | gdk::Key::F if shift => {
+                        let on = !t.canvas.state.borrow().doc.sheet.canvas.is_omarchy_frame();
+                        t.set_omarchy_frame(on);
+                    }
                     gdk::Key::w => {
                         if t.confirm_close() == glib::Propagation::Proceed {
                             t.win.destroy();

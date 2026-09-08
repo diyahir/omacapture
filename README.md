@@ -32,6 +32,9 @@ Select, crop (aspect presets, edge snapping, auto-crop), rectangle, filled recta
 - **Auto-redact** pixelates emails, phone numbers, URLs, card numbers, API tokens, and `key=value` credentials found by local OCR.
 - **Editable sessions**: every save keeps the original pixels and annotations, so a saved screenshot reopens with everything still editable.
 - **Theme aware**: colors come from the active Omarchy theme, corners are square like the shell, the font is the system monospace, and the swatch palette is built from the theme. Theme switches apply instantly.
+- **Omarchy frame**: the "Omarchy frame" button in the editor toolbar (or `Ctrl+Shift+F`) puts the capture on your whole current Omarchy wallpaper, lightly blurred, at the wallpaper's own aspect ratio, with rounded corners and a shadow. Turn it on for every new capture under Preferences → Editor → "Frame new captures with", or ask for it over MCP with `background: "wallpaper"`.
+
+<img src="docs/screenshots/wallpaper-frame.png" alt="A capture framed by the blurred Omarchy wallpaper" width="760">
 
 ## Install
 
@@ -149,6 +152,8 @@ global_delete = "SUPER + DELETE"
 global_open = ""
 
 [annotate]
+default_background = "none"               # none | wallpaper (blurred Omarchy background) | blurred, applied to new captures
+default_padding = 0.0                     # 0 picks the padding from the capture size
 stroke_color = "#ff3b30"                  # the theme red is used while this is the stock default
 fill_color = "#ff3b3080"
 text_color = "#ff3b30"
@@ -200,6 +205,8 @@ The image above was produced entirely by an agent: one `capture_window` call, th
 | `list_monitors`, `list_windows` | Discover outputs and visible windows |
 | `capture_screen`, `capture_area`, `capture_window` | Grab pixels headlessly; returns the saved path plus a downscaled image |
 | `capture_interactive` | Ask the human to pick a region or window; blocks until they finish |
+| `describe_screen` | Capture plus every visible window's geometry plus OCR text lines with screen coordinates, in one call, so an agent can find a button by its label |
+| `compare` | Diff two captures: percentage changed, bounding boxes of changed regions, and an outlined diff image, for verifying that an action did what it should |
 | `ocr` | Text or word boxes from a file or screen area |
 | `annotate` | Every editor tool from JSON: rectangles, ovals, lines, arrows, text, labels, callouts, highlights, blur, spotlight, counters, watermark, pencil, crop, and canvas backgrounds |
 | `redact` | OCR the image and pixelate emails, phones, URLs, card numbers, tokens, credentials, plus any extra regex |
@@ -207,7 +214,7 @@ The image above was produced entirely by an agent: one `capture_window` call, th
 | `get_config`, `set_config` | Read the configuration or change any setting; invalid values are rejected |
 | `history_list`, `read_image`, `open_editor` | Browse recent captures, look at a file, or hand an image to the human |
 
-`annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed.
+Resources `omacapture://latest` (the newest capture as PNG) and `omacapture://history` (recent captures as JSON) are also exposed. `annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed.
 
 **What an agent can and cannot do.** Tools that take an output path only write `.png`, `.jpg`, or `.webp`, only inside your save folder, the private capture cache, the source image's own folder, or directories you list under `[mcp] allowed_write_dirs`, and never replace an existing file unless `overwrite: true` is passed. `set_config` cannot change the save folder or the `[mcp]` section, so an agent cannot widen its own fence. Run `omacapture mcp --read-only` to expose only capture, OCR, read, and list tools: captures then go to the private cache and nothing user-named is ever written. Scratch captures live in `~/.local/share/omacapture/captures` with owner-only permissions and are swept with the history retention window. There is no network access anywhere.
 
