@@ -59,7 +59,7 @@ impl QuickAccessPanel {
             let old = self.cards.remove(0);
             stack.remove(&old);
         }
-        let card = build_card(gb, frame, path, is_saved, cfg.thumbnail_width, cfg.auto_dismiss_secs);
+        let card = build_card(gb, frame, path, is_saved, cfg.thumbnail_width.clamp(60, 2000), cfg.auto_dismiss_secs);
         stack.append(&card);
         self.cards.push(card.clone().upcast());
         if let Some(w) = &self.window {

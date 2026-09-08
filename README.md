@@ -60,15 +60,20 @@ omarchy-shell omashot recheck
 
 ### Keybindings
 
-Omarchy owns global shortcuts. Add to `~/.config/hypr/bindings.lua`:
+Omarchy owns global shortcuts, and the plugin never edits your configuration on its own. Install bindings when you want them, from Preferences → Shortcuts or the CLI:
+
+```sh
+omashot keybinds status            # which preset keys are free
+omashot keybinds install super-i   # Super+I area, Super+Shift+I annotate (press A in the overlay for windows)
+omashot keybinds install print     # take over Print (unbinds Omarchy's screenshot key), Shift/Ctrl/Super+Ctrl variants
+omashot keybinds remove            # take the block out again
+```
+
+This appends a clearly marked block to `~/.config/hypr/bindings.lua` (after backing it up), refuses if a key is already bound unless you pass `--force`, and reloads Hyprland. Or paste it yourself:
 
 ```lua
 o.bind("SUPER + I", "Screenshot", "omarchy-shell omashot area")
 o.bind("SUPER + SHIFT + I", "Screenshot and annotate", "omarchy-shell omashot annotate")
-
--- Or take over Print:
-hl.unbind("PRINT")
-o.bind("PRINT", "Screenshot", "omarchy-shell omashot area")
 ```
 
 ### Omarchy menu
@@ -147,7 +152,7 @@ languages = "eng"                         # or $OMARCHY_OCR_LANGS, e.g. "eng+deu
 copy_to_clipboard = true
 ```
 
-Widget settings (`clickMode`, `showDaemon`) live in `~/.config/omarchy/shell.json` under the bar layout entry.
+The widget setting `clickMode` lives in `~/.config/omarchy/shell.json` under the bar layout entry.
 
 ## MCP server for agents
 
@@ -173,7 +178,7 @@ The image above was produced entirely by an agent: one `capture_window` call, th
 | `get_config`, `set_config` | Read the configuration or change any setting; invalid values are rejected |
 | `history_list`, `read_image`, `open_editor` | Browse recent captures, look at a file, or hand an image to the human |
 
-`annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed.
+`annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed. Tools that take an output `path` only write `.png`, `.jpg`, or `.webp` and refuse to replace an existing file unless `overwrite: true` is passed. Scratch captures live in `~/.local/share/omashot/captures` with owner-only permissions and are swept with the history retention window.
 
 ## Remove
 
@@ -197,7 +202,9 @@ cargo build --release && install -Dm755 target/release/omashot ~/.local/bin/omas
 cargo test                                    # model, redaction, and editor gesture tests
 omarchy plugin validate .                     # manifest check
 omarchy-shell shell rescanPlugins             # hot-reload QML after edits
-cargo build --release --manifest-path tools/wlptr/Cargo.toml   # virtual pointer for live gesture tests
+cargo build --release --manifest-path tools/wlptr/Cargo.toml   # dev-only virtual pointer for live gesture tests; not part of the install
 ```
+
+`.mcp.json` at the repo root registers the MCP server for Claude Code when the checkout is opened as a project; it does nothing otherwise.
 
 See `docs/SPEC.md` for the behavioral specification.

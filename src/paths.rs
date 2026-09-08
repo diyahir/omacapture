@@ -23,12 +23,32 @@ pub fn sessions_dir() -> PathBuf {
     data_dir().join("sessions")
 }
 
+/// Scratch captures (Quick Access without save, drag-to-app, MCP `save:false`).
+/// Lives under the user's data dir, never a shared /tmp, and is created 0700.
 pub fn temp_dir() -> PathBuf {
-    std::env::temp_dir().join("omashot")
+    data_dir().join("captures")
 }
 
 pub fn ensure_dirs() {
+    use std::os::unix::fs::DirBuilderExt;
     for d in [config_dir(), data_dir(), sessions_dir(), temp_dir()] {
-        let _ = std::fs::create_dir_all(d);
+        let _ = std::fs::DirBuilder::new().recursive(true).mode(0o700).create(d);
+    }
+}
+
+/// Delete scratch captures older than `max_age_days` (0 keeps everything).
+pub fn sweep_temp(max_age_days: u32) {
+    if max_age_days == 0 {
+        return;
+    }
+    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(max_age_days as u64 * 86_400);
+    if let Ok(entries) = std::fs::read_dir(temp_dir()) {
+        for e in entries.flatten() {
+            if let Ok(meta) = e.metadata() {
+                if meta.is_file() && meta.modified().map(|m| m < cutoff).unwrap_or(false) {
+                    let _ = std::fs::remove_file(e.path());
+                }
+            }
+        }
     }
 }

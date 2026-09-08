@@ -160,7 +160,13 @@ pub fn open(gb: &Rc<Omashot>) {
     g_files.add(&folder_row);
     {
         let gb = outer.clone();
-        g_files.add(&entry_row("Filename pattern (strftime)", &cfg.general.filename_pattern, move |v| gb.config.update(|c| c.general.filename_pattern = v)));
+        g_files.add(&entry_row("Filename pattern (strftime)", &cfg.general.filename_pattern, move |v| {
+            if crate::config::validate_filename_pattern(&v).is_ok() {
+                gb.config.update(|c| c.general.filename_pattern = v)
+            } else {
+                tracing::warn!("ignoring invalid filename pattern {v:?}");
+            }
+        }));
     }
     {
         let gb = outer.clone();
@@ -301,13 +307,86 @@ pub fn open(gb: &Rc<Omashot>) {
     let keys = adw::PreferencesPage::new();
     keys.set_title("Shortcuts");
     keys.set_icon_name(Some("input-keyboard-symbolic"));
+    let g_install = adw::PreferencesGroup::new();
+    g_install.set_title("Install keybindings");
+    g_install.set_description(Some("Adds a marked block to ~/.config/hypr/bindings.lua and reloads Hyprland. Nothing is written until you click Install; Remove takes exactly that block out again."));
+    let preset_row = combo_row("Preset", &["Super+I (area), Super+Shift+I (annotate)", "Print (replaces Omarchy's screenshot key), Shift+Print, Ctrl+Print, Super+Ctrl+Print"], 0, |_| {});
+    g_install.add(&preset_row);
+    let status_row = adw::ActionRow::new();
+    status_row.set_title("Status");
+    let refresh_status = {
+        let status_row = status_row.clone();
+        let preset_row = preset_row.clone();
+        Rc::new(move || {
+            let preset = if preset_row.selected() == 1 { crate::keybinds::Preset::Print } else { crate::keybinds::Preset::SuperI };
+            let file = crate::keybinds::bindings_file();
+            let installed = crate::keybinds::is_installed(&file);
+            let taken = crate::keybinds::conflicts(preset);
+            let mut text = if installed { "Omashot block is installed".to_string() } else { "Not installed".to_string() };
+            if !taken.is_empty() {
+                text.push_str(&format!(" · already bound: {}", taken.join(", ")));
+            }
+            status_row.set_subtitle(&text);
+        })
+    };
+    refresh_status();
+    {
+        let r = refresh_status.clone();
+        preset_row.connect_selected_notify(move |_| r());
+    }
+    let install_btn = gtk::Button::with_label("Install");
+    install_btn.add_css_class("suggested-action");
+    install_btn.set_valign(gtk::Align::Center);
+    let remove_btn = gtk::Button::with_label("Remove");
+    remove_btn.set_valign(gtk::Align::Center);
+    {
+        let preset_row = preset_row.clone();
+        let r = refresh_status.clone();
+        let win = win.clone();
+        install_btn.connect_clicked(move |_| {
+            let preset = if preset_row.selected() == 1 { crate::keybinds::Preset::Print } else { crate::keybinds::Preset::SuperI };
+            let taken = crate::keybinds::conflicts(preset);
+            let file = crate::keybinds::bindings_file();
+            let r2 = r.clone();
+            let do_install = move || match crate::keybinds::install(preset, &file, true) {
+                Ok(_) => r2(),
+                Err(e) => tracing::error!("keybinds install failed: {e}"),
+            };
+            if taken.is_empty() || preset == crate::keybinds::Preset::Print {
+                do_install();
+            } else {
+                let dialog = adw::AlertDialog::new(Some("Keys already bound"), Some(&format!("{}\n\nInstall anyway? Hyprland uses the last definition, so Omashot would win.", taken.join("\n"))));
+                dialog.add_responses(&[("cancel", "Cancel"), ("install", "Install anyway")]);
+                dialog.set_response_appearance("install", adw::ResponseAppearance::Suggested);
+                dialog.connect_response(None, move |_, resp| {
+                    if resp == "install" {
+                        do_install();
+                    }
+                });
+                dialog.present(Some(&win));
+            }
+        });
+    }
+    {
+        let r = refresh_status.clone();
+        remove_btn.connect_clicked(move |_| {
+            if let Err(e) = crate::keybinds::remove(&crate::keybinds::bindings_file(), true) {
+                tracing::error!("keybinds remove failed: {e}");
+            }
+            r();
+        });
+    }
+    status_row.add_suffix(&remove_btn);
+    status_row.add_suffix(&install_btn);
+    g_install.add(&status_row);
+    keys.add(&g_install);
+
     let g_keys = adw::PreferencesGroup::new();
-    g_keys.set_title("Hyprland bindings");
-    g_keys.set_description(Some("Global shortcuts belong to the compositor. Add these lines to ~/.config/hypr/bindings.conf (or your keybinds file) and reload Hyprland."));
+    g_keys.set_title("Or add them by hand");
+    g_keys.set_description(Some("Global shortcuts belong to Hyprland. Paste this into ~/.config/hypr/bindings.lua; it reloads on save."));
     let exe = std::env::current_exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| "omashot".into());
-    let snippet = format!(
-        "bind = , PRINT, exec, {exe} area\nbind = SHIFT, PRINT, exec, {exe} window\nbind = CTRL, PRINT, exec, {exe} full\nbind = ALT, PRINT, exec, {exe} area --annotate\nbind = SUPER SHIFT, T, exec, {exe} ocr\nbind = SUPER SHIFT, H, exec, {exe} history\nexec-once = {exe} daemon\n"
-    );
+    let _ = exe;
+    let snippet = format!("{}\n", crate::keybinds::block(crate::keybinds::Preset::SuperI));
     let view = gtk::TextView::new();
     view.set_editable(false);
     view.set_monospace(true);

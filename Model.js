@@ -24,12 +24,3 @@ function actionById(id) {
 function commandFor(id) {
   return actionById(id).command
 }
-
-// Shell-quoted so a path with spaces survives `bash -lc`.
-function quote(value) {
-  return "'" + String(value).replace(/'/g, "'\\''") + "'"
-}
-
-function editCommand(path) {
-  return BINARY + " annotate " + quote(path)
-}

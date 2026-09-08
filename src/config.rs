@@ -232,7 +232,26 @@ impl Config {
         let path = crate::paths::config_file();
         match std::fs::read_to_string(&path) {
             Ok(text) => match toml::from_str::<Config>(&text) {
-                Ok(cfg) => cfg,
+                Ok(mut cfg) => {
+                    if let Err(e) = cfg.validate() {
+                        tracing::warn!("config value rejected ({e}); using the default for it");
+                        let d = Config::default();
+                        if validate_filename_pattern(&cfg.general.filename_pattern).is_err() {
+                            cfg.general.filename_pattern = d.general.filename_pattern;
+                        }
+                        if !cfg.general.save_folder.is_absolute() {
+                            cfg.general.save_folder = d.general.save_folder;
+                        }
+                        cfg.general.quality = cfg.general.quality.clamp(1, 100);
+                        cfg.quick_access.thumbnail_width = cfg.quick_access.thumbnail_width.clamp(60, 2000);
+                        cfg.quick_access.max_cards = cfg.quick_access.max_cards.clamp(1, 10);
+                        cfg.annotate.blur_strength = cfg.annotate.blur_strength.clamp(1.0, 20.0);
+                        cfg.annotate.stroke_width = cfg.annotate.stroke_width.clamp(0.5, 64.0);
+                        cfg.annotate.font_size = cfg.annotate.font_size.clamp(4.0, 400.0);
+                        cfg.general.delay_ms = cfg.general.delay_ms.min(60_000);
+                    }
+                    cfg
+                }
                 Err(e) => {
                     tracing::warn!("config parse error in {}: {e}; using defaults", path.display());
                     Config::default()
@@ -278,7 +297,7 @@ impl ConfigHandle {
     /// Re-read the file (after an external edit) if it parses.
     pub fn reload(&self) -> bool {
         let path = crate::paths::config_file();
-        match std::fs::read_to_string(&path).ok().and_then(|t| toml::from_str::<Config>(&t).ok()) {
+        match std::fs::read_to_string(&path).ok().and_then(|t| toml::from_str::<Config>(&t).ok()).filter(|c| c.validate().is_ok()) {
             Some(cfg) => {
                 *self.0.write().unwrap() = cfg;
                 tracing::info!("config reloaded from {}", path.display());
@@ -323,9 +342,56 @@ impl Config {
     pub fn merge_json(&mut self, patch: &serde_json::Value) -> Result<()> {
         let mut current = serde_json::to_value(&*self)?;
         deep_merge(&mut current, patch);
-        *self = serde_json::from_value(current)?;
+        let candidate: Config = serde_json::from_value(current)?;
+        candidate.validate()?;
+        *self = candidate;
         Ok(())
     }
+
+    /// Reject values that would crash the daemon or write outside the save folder.
+    pub fn validate(&self) -> Result<()> {
+        validate_filename_pattern(&self.general.filename_pattern)?;
+        if !self.general.save_folder.is_absolute() {
+            anyhow::bail!("general.save_folder must be an absolute path");
+        }
+        if !(1..=100).contains(&self.general.quality) {
+            anyhow::bail!("general.quality must be 1-100");
+        }
+        if !(60..=2000).contains(&self.quick_access.thumbnail_width) {
+            anyhow::bail!("quick_access.thumbnail_width must be 60-2000");
+        }
+        if !(1..=10).contains(&self.quick_access.max_cards) {
+            anyhow::bail!("quick_access.max_cards must be 1-10");
+        }
+        if !(1.0..=20.0).contains(&self.annotate.blur_strength) {
+            anyhow::bail!("annotate.blur_strength must be 1-20");
+        }
+        if !(0.5..=64.0).contains(&self.annotate.stroke_width) {
+            anyhow::bail!("annotate.stroke_width must be 0.5-64");
+        }
+        if !(4.0..=400.0).contains(&self.annotate.font_size) {
+            anyhow::bail!("annotate.font_size must be 4-400");
+        }
+        if self.general.delay_ms > 60_000 {
+            anyhow::bail!("general.delay_ms must be at most 60000");
+        }
+        Ok(())
+    }
+}
+
+/// A strftime pattern must be well formed and must stay inside the save folder.
+pub fn validate_filename_pattern(pattern: &str) -> Result<()> {
+    use chrono::format::{Item, StrftimeItems};
+    if pattern.trim().is_empty() {
+        anyhow::bail!("filename_pattern must not be empty");
+    }
+    if pattern.contains('/') || pattern.contains('\\') || pattern.contains("..") {
+        anyhow::bail!("filename_pattern must not contain path separators or '..'");
+    }
+    if StrftimeItems::new(pattern).any(|i| matches!(i, Item::Error)) {
+        anyhow::bail!("filename_pattern contains an invalid strftime specifier");
+    }
+    Ok(())
 }
 
 fn deep_merge(target: &mut serde_json::Value, patch: &serde_json::Value) {

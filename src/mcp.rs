@@ -83,7 +83,8 @@ fn tool_definitions() -> Vec<Value> {
     let capture_common = json!({
         "cursor": {"type":"boolean","description":"Include the mouse cursor","default":false},
         "save": {"type":"boolean","description":"Write the capture to the configured screenshots folder (default) instead of a temp file","default":true},
-        "path": {"type":"string","description":"Explicit output path (PNG/JPG/WebP by extension)"},
+        "path": {"type":"string","description":"Explicit output path (must end in .png, .jpg, or .webp). Refuses to replace an existing file unless overwrite is true"},
+        "overwrite": {"type":"boolean","description":"Allow replacing an existing file at path","default":false},
         "max_width": {"type":"integer","description":"Downscale the returned image to at most this width; the saved file keeps full resolution","default":1280},
         "return_image": {"type":"boolean","description":"Attach the image to the response","default":true}
     });
@@ -143,7 +144,8 @@ fn tool_definitions() -> Vec<Value> {
             "description": "Draw annotations onto an image and write the result. Every editor tool is available: rect, filled_rect, oval, line, arrow, text, label, callout, highlight, blur, spotlight, counter, watermark, pencil, plus crop and canvas backgrounds. Coordinates are source-image pixels (see read_image or a capture result for the size). Call describe_annotations for the full per-type field reference. With open_in_editor=true the result is also saved as an editable session and opened for the human, who can keep editing every item.",
             "inputSchema": {"type":"object","required":["path","items"],"properties":{
                 "path":{"type":"string","description":"Source image"},
-                "output":{"type":"string","description":"Destination path; defaults to <source>-annotated.<ext>"},
+                "output":{"type":"string","description":"Destination path (.png/.jpg/.webp); defaults to <source>-annotated.<ext>. Refuses to replace an existing file unless overwrite is true"},
+                "overwrite":{"type":"boolean","default":false},
                 "items":{"type":"array","description":"Annotation items, drawn in order (blur always renders under markup)","items":{"type":"object","required":["type"],"properties":{
                     "type":{"type":"string","enum":["rect","filled_rect","oval","line","arrow","text","label","callout","highlight","blur","spotlight","counter","watermark","pencil"]},
                     "x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"},
@@ -186,7 +188,8 @@ fn tool_definitions() -> Vec<Value> {
             "description": "Find sensitive text in an image with local OCR (emails, phone numbers, URLs, card numbers, API tokens, key=value credentials) and pixelate it. Returns the redacted image and the list of regions.",
             "inputSchema": {"type":"object","required":["path"],"properties":{
                 "path":{"type":"string"},
-                "output":{"type":"string"},
+                "output":{"type":"string","description":"Destination (.png/.jpg/.webp); defaults to <source>-annotated.<ext>. Refuses to replace an existing file unless overwrite is true"},
+                "overwrite":{"type":"boolean","default":false},
                 "effect":{"type":"string","enum":["pixelate","gaussian","crystallize","halftone","tape","washi"],"default":"pixelate"},
                 "strength":{"type":"number","default":8},
                 "extra_patterns":{"type":"array","description":"Additional regular expressions; any matching word is redacted too","items":{"type":"string"}},
@@ -237,7 +240,8 @@ fn bool_arg(args: &Value, key: &str, default: bool) -> bool {
 }
 
 fn image_content(img: &image::RgbaImage, max_width: u32) -> Result<Value> {
-    let img = if max_width > 0 && img.width() > max_width {
+    let max_width = if max_width == 0 { 1280 } else { max_width.min(8192) };
+    let img = if img.width() > max_width {
         let h = (img.height() as f64 * max_width as f64 / img.width() as f64).round().max(1.0) as u32;
         image::imageops::resize(img, max_width, h, image::imageops::FilterType::Triangle)
     } else {
@@ -256,7 +260,7 @@ fn finish_capture(frame: Frame, args: &Value, extra: Value) -> Result<Vec<Value>
     let cfg = crate::config::Config::load();
     let path = if let Some(p) = str_arg(args, "path") {
         let p = std::path::PathBuf::from(p);
-        crate::export::save_to(&frame.image, &p, cfg.general.quality)?;
+        crate::export::save_to(&frame.image, &p, cfg.general.quality, bool_arg(args, "overwrite", false))?;
         p
     } else if bool_arg(args, "save", true) {
         let p = crate::export::save(&frame.image, &cfg)?;
@@ -653,13 +657,13 @@ fn annotate_tool(args: &Value) -> Result<Vec<Value>> {
         }
     }
     if let Some(p) = f_arg(args, "padding") {
-        doc.sheet.canvas.padding = p;
+        doc.sheet.canvas.padding = p.clamp(0.0, 1024.0);
     }
     if let Some(r) = f_arg(args, "corner_radius") {
-        doc.sheet.canvas.corner_radius = r;
+        doc.sheet.canvas.corner_radius = r.clamp(0.0, 512.0);
     }
     if let Some(s) = f_arg(args, "shadow") {
-        doc.sheet.canvas.shadow = s;
+        doc.sheet.canvas.shadow = s.clamp(0.0, 1.0);
     }
     finish_document(args, &path, doc, items.len())
 }
@@ -684,7 +688,7 @@ fn finish_document(args: &Value, path: &std::path::Path, doc: Document, item_cou
             }
         }
     };
-    crate::export::save_to(&out, &output, cfg.general.quality)?;
+    crate::export::save_to(&out, &output, cfg.general.quality, bool_arg(args, "overwrite", false))?;
     if cfg.history.enabled {
         if let Ok(h) = crate::history::History::open() {
             let _ = h.insert(&output, out.width(), out.height(), None);
@@ -737,11 +741,13 @@ fn redact_tool(args: &Value) -> Result<Vec<Value>> {
         Some("washi") => BlurEffect::Washi,
         _ => BlurEffect::Pixelate,
     };
-    let extra: Vec<regex::Regex> = args
-        .get("extra_patterns")
-        .and_then(|p| p.as_array())
-        .map(|a| a.iter().filter_map(|v| v.as_str()).filter_map(|p| regex::Regex::new(p).ok()).collect())
-        .unwrap_or_default();
+    let mut extra: Vec<regex::Regex> = Vec::new();
+    if let Some(patterns) = args.get("extra_patterns").and_then(|p| p.as_array()) {
+        for v in patterns {
+            let p = v.as_str().ok_or_else(|| anyhow!("extra_patterns must be strings"))?;
+            extra.push(regex::Regex::new(p).with_context(|| format!("invalid extra pattern {p:?}"))?);
+        }
+    }
     let mut doc = Document::new(Frame { image: img, scale: 1.0 });
     let style = Style::default();
     let mut regions = Vec::new();

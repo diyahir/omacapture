@@ -52,21 +52,45 @@ pub fn save(img: &RgbaImage, cfg: &Config) -> Result<PathBuf> {
     Ok(path)
 }
 
-pub fn save_to(img: &RgbaImage, path: &Path, quality: u8) -> Result<()> {
+/// Write an image to an explicit path. Only image extensions are accepted, and
+/// an existing file is only replaced when `overwrite` is set, so a tool driven by
+/// an agent cannot silently clobber arbitrary files.
+pub fn save_to(img: &RgbaImage, path: &Path, quality: u8, overwrite: bool) -> Result<()> {
+    use std::io::Write;
     let format = match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("png") => ImageFormat::Png,
         Some("jpg") | Some("jpeg") => ImageFormat::Jpg,
         Some("webp") => ImageFormat::Webp,
-        _ => ImageFormat::Png,
+        _ => anyhow::bail!("output path must end in .png, .jpg, or .webp: {}", path.display()),
     };
-    std::fs::write(path, encode(img, format, quality)?)?;
+    let bytes = encode(img, format, quality)?;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true);
+    if overwrite {
+        opts.create(true).truncate(true);
+    } else {
+        opts.create_new(true);
+    }
+    let mut f = opts.open(path).with_context(|| {
+        if overwrite {
+            format!("writing {}", path.display())
+        } else {
+            format!("{} already exists (pass overwrite: true to replace it)", path.display())
+        }
+    })?;
+    f.write_all(&bytes)?;
     Ok(())
 }
 
 /// Write a PNG into the temp dir so it can be dragged or shared by URI.
 pub fn write_temp_png(img: &RgbaImage) -> Result<PathBuf> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
     crate::paths::ensure_dirs();
     let name = format!("omashot-{}.png", chrono::Local::now().format("%Y%m%d-%H%M%S-%3f"));
     let path = crate::paths::temp_dir().join(name);
-    std::fs::write(&path, encode_png(img)?)?;
+    // Owner-only and never follows a pre-planted symlink.
+    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path)?;
+    f.write_all(&encode_png(img)?)?;
     Ok(path)
 }

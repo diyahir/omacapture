@@ -45,6 +45,7 @@ pub fn run() -> glib::ExitCode {
         let config = Config::load();
         let history = History::open().expect("history db");
         let _ = history.prune(config.history.retention_days, config.history.max_entries);
+        crate::paths::sweep_temp(config.history.retention_days.max(1));
         let config_handle = ConfigHandle::new(config);
         let config_monitor = config_handle.watch();
         let gb = Rc::new(Omashot {
@@ -96,7 +97,7 @@ pub fn dispatch(gb: &Rc<Omashot>, cmd: Command) {
         Command::Annotate { file } => crate::annotate::open_file(gb, &file),
         Command::History => crate::history::browser::open(gb),
         Command::Settings => crate::annotate::preferences::open(gb),
-        Command::Mcp => {}
+        Command::Mcp | Command::Keybinds { .. } => {}
     }
 }
 
