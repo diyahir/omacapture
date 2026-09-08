@@ -4,11 +4,11 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// Popout listing every Omashot capture action. Keyboard: Up/Down to move,
+// Popout listing every Omacapture capture action. Keyboard: Up/Down to move,
 // Enter to run, Escape to close.
 Panel {
   id: root
-  moduleName: "io.github.diyaclanker.omashot"
+  moduleName: "io.github.diyaclanker.omacapture"
   manageIpc: false
 
   property var anchorItem: null
@@ -39,7 +39,7 @@ Panel {
   function run(index) {
     var action = root.actions[Math.max(0, Math.min(index, root.actions.length - 1))]
     root.close()
-    Util.execArgv(["omarchy-shell", "omashot", action.id])
+    Util.execArgv(["omarchy-shell", "omacapture", action.id])
   }
 
   function moveCursor(delta) {
@@ -74,7 +74,7 @@ Panel {
 
         PanelHero {
           width: parent.width
-          title: "Omashot"
+          title: "Omacapture"
           meta: "Capture and annotate"
           foreground: root.foreground
           fontFamily: root.fontFamily

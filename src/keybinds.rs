@@ -5,8 +5,8 @@
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
-const BEGIN: &str = "-- omashot:begin (managed by `omashot keybinds`; edit or remove freely)";
-const END: &str = "-- omashot:end";
+const BEGIN: &str = "-- omacapture:begin (managed by `omacapture keybinds`; edit or remove freely)";
+const END: &str = "-- omacapture:end";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Preset {
@@ -21,23 +21,23 @@ pub fn bindings_file() -> PathBuf {
 }
 
 fn shell_cmd(verb: &str) -> String {
-    format!("omarchy-shell omashot {verb}")
+    format!("omarchy-shell omacapture {verb}")
 }
 
 pub fn block(preset: Preset) -> String {
     let mut lines = vec![BEGIN.to_string()];
     match preset {
         Preset::SuperI => {
-            lines.push(format!("o.bind(\"SUPER + I\", \"Screenshot (Omashot)\", \"{}\")", shell_cmd("area")));
-            lines.push(format!("o.bind(\"SUPER + SHIFT + I\", \"Screenshot and annotate (Omashot)\", \"{}\")", shell_cmd("annotate")));
+            lines.push(format!("o.bind(\"SUPER + I\", \"Screenshot (Omacapture)\", \"{}\")", shell_cmd("area")));
+            lines.push(format!("o.bind(\"SUPER + SHIFT + I\", \"Screenshot and annotate (Omacapture)\", \"{}\")", shell_cmd("annotate")));
         }
         Preset::Print => {
             lines.push("hl.unbind(\"PRINT\")".into());
-            lines.push(format!("o.bind(\"PRINT\", \"Screenshot (Omashot)\", \"{}\")", shell_cmd("area")));
-            lines.push(format!("o.bind(\"SHIFT + PRINT\", \"Screenshot window (Omashot)\", \"{}\")", shell_cmd("window")));
-            lines.push(format!("o.bind(\"CTRL + PRINT\", \"Screenshot and annotate (Omashot)\", \"{}\")", shell_cmd("annotate")));
+            lines.push(format!("o.bind(\"PRINT\", \"Screenshot (Omacapture)\", \"{}\")", shell_cmd("area")));
+            lines.push(format!("o.bind(\"SHIFT + PRINT\", \"Screenshot window (Omacapture)\", \"{}\")", shell_cmd("window")));
+            lines.push(format!("o.bind(\"CTRL + PRINT\", \"Screenshot and annotate (Omacapture)\", \"{}\")", shell_cmd("annotate")));
             lines.push("hl.unbind(\"SUPER + CTRL + PRINT\")".into());
-            lines.push(format!("o.bind(\"SUPER + CTRL + PRINT\", \"Extract text (Omashot)\", \"{}\")", shell_cmd("ocr")));
+            lines.push(format!("o.bind(\"SUPER + CTRL + PRINT\", \"Extract text (Omacapture)\", \"{}\")", shell_cmd("ocr")));
         }
     }
     lines.push(END.to_string());
@@ -65,7 +65,7 @@ pub fn conflicts(preset: Preset) -> Vec<String> {
         let mask = b.get("modmask").and_then(|m| m.as_u64()).unwrap_or(0) as u32;
         let desc = b.get("description").and_then(|d| d.as_str()).unwrap_or("");
         let arg = b.get("arg").and_then(|d| d.as_str()).unwrap_or("");
-        if keys.iter().any(|(k, m)| *k == key && *m == mask) && !desc.contains("Omashot") && !arg.contains("omashot") {
+        if keys.iter().any(|(k, m)| *k == key && *m == mask) && !desc.contains("Omacapture") && !arg.contains("omacapture") {
             let mods = [(64, "SUPER"), (4, "CTRL"), (1, "SHIFT"), (8, "ALT")]
                 .iter()
                 .filter(|(bit, _)| mask & bit != 0)
@@ -209,14 +209,14 @@ pub fn run(cmd: KeybindsCommand) -> Result<()> {
         KeybindsCommand::Remove { file, no_reload } => {
             let file = file.unwrap_or_else(bindings_file);
             if remove(&file, !no_reload)? {
-                println!("Removed Omashot bindings from {}", file.display());
+                println!("Removed Omacapture bindings from {}", file.display());
             } else {
-                println!("No Omashot bindings found in {}", file.display());
+                println!("No Omacapture bindings found in {}", file.display());
             }
         }
         KeybindsCommand::Status => {
             let file = bindings_file();
-            println!("{}: {}", file.display(), if is_installed(&file) { "Omashot block present" } else { "no Omashot block" });
+            println!("{}: {}", file.display(), if is_installed(&file) { "Omacapture block present" } else { "no Omacapture block" });
             for preset in [Preset::SuperI, Preset::Print] {
                 let taken = conflicts(preset);
                 println!(
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn install_is_idempotent_and_removable() {
-        let dir = std::env::temp_dir().join(format!("omashot-kb-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("omacapture-kb-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("bindings.lua");
         std::fs::write(&file, "-- user stuff\no.bind(\"SUPER + B\", \"Browser\", \"chromium\")\n").unwrap();

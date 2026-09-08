@@ -41,9 +41,9 @@ jobs:
           GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1920x1080x24" cargo test --locked
       - name: Smoke-test the binary
         run: |
-          ./target/release/omashot --version
-          ./target/release/omashot keybinds show super-i
-          ./target/release/omashot keybinds show print
+          ./target/release/omacapture --version
+          ./target/release/omacapture keybinds show super-i
+          ./target/release/omacapture keybinds show print
 
   lint:
     name: rustfmt and clippy

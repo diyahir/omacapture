@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-pub const APP_ID: &str = "io.github.diyaclanker.omashot";
+pub const APP_ID: &str = "io.github.diyaclanker.omacapture";
 
 pub fn config_dir() -> PathBuf {
-    dirs::config_dir().unwrap_or_else(|| PathBuf::from("~/.config")).join("omashot")
+    dirs::config_dir().unwrap_or_else(|| PathBuf::from("~/.config")).join("omacapture")
 }
 
 pub fn config_file() -> PathBuf {
@@ -11,14 +11,14 @@ pub fn config_file() -> PathBuf {
 }
 
 pub fn data_dir() -> PathBuf {
-    dirs::data_dir().unwrap_or_else(|| PathBuf::from("~/.local/share")).join("omashot")
+    dirs::data_dir().unwrap_or_else(|| PathBuf::from("~/.local/share")).join("omacapture")
 }
 
 pub fn history_db() -> PathBuf {
     data_dir().join("history.sqlite")
 }
 
-/// Directory holding editable annotation sessions (`*.omashot.json`).
+/// Directory holding editable annotation sessions (`*.omacapture.json`).
 pub fn sessions_dir() -> PathBuf {
     data_dir().join("sessions")
 }
@@ -29,8 +29,25 @@ pub fn temp_dir() -> PathBuf {
     data_dir().join("captures")
 }
 
+/// One-time move of the previous install's config, history, sessions, and
+/// capture cache from the old program name.
+pub fn migrate_from_old_name() {
+    const OLD: &str = "omashot";
+    let pairs =
+        [(dirs::config_dir().unwrap_or_default().join(OLD), config_dir()), (dirs::data_dir().unwrap_or_default().join(OLD), data_dir())];
+    for (old, new) in pairs {
+        if old.is_dir() && !new.exists() {
+            match std::fs::rename(&old, &new) {
+                Ok(()) => tracing::info!("migrated {} -> {}", old.display(), new.display()),
+                Err(e) => tracing::warn!("could not migrate {}: {e}", old.display()),
+            }
+        }
+    }
+}
+
 pub fn ensure_dirs() {
     use std::os::unix::fs::DirBuilderExt;
+    migrate_from_old_name();
     for d in [config_dir(), data_dir(), sessions_dir(), temp_dir()] {
         let _ = std::fs::DirBuilder::new().recursive(true).mode(0o700).create(d);
     }

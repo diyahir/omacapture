@@ -4,11 +4,11 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// Bar button for Omashot. Left click runs the configured capture mode,
+// Bar button for Omacapture. Left click runs the configured capture mode,
 // right click opens the panel with every capture action.
 BarWidget {
   id: root
-  moduleName: "io.github.diyaclanker.omashot"
+  moduleName: "io.github.diyaclanker.omacapture"
 
   readonly property bool opened: panelLoader.item
     ? panelLoader.item.opened === true
@@ -44,7 +44,7 @@ BarWidget {
   function capture(mode) {
     root.close()
     // Route through the service, which knows where the binary was installed.
-    Util.execArgv(["omarchy-shell", "omashot", mode])
+    Util.execArgv(["omarchy-shell", "omacapture", mode])
   }
 
   implicitWidth: button.implicitWidth

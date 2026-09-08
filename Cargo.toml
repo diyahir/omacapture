@@ -1,5 +1,5 @@
 [package]
-name = "omashot"
+name = "omacapture"
 version = "0.1.0"
 edition = "2021"
 description = "Screenshot capture and annotation for Wayland / Hyprland"

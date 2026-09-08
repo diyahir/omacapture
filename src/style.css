@@ -1,6 +1,6 @@
 /* Omarchy-style chrome: square corners, hairline borders, monospace type. */
 
-window, .omashot-window { font-family: monospace; }
+window, .omacapture-window { font-family: monospace; }
 
 /* Kill rounding everywhere the shell has none. */
 button, .card, popover > contents, popover > arrow, entry, spinbutton, dropdown > button,
@@ -39,9 +39,9 @@ spinbutton button { border: none; }
 .annotate-canvas { background: @view_bg_color; }
 .annotate-text-edit { border: 1px solid @accent_bg_color; }
 
-.omashot-overlay { background: transparent; }
+.omacapture-overlay { background: transparent; }
 
-.omashot-quickaccess { background: transparent; }
+.omacapture-quickaccess { background: transparent; }
 .qa-card {
   background: @window_bg_color;
   border: 1px solid @borders;

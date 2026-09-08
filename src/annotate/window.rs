@@ -4,7 +4,7 @@ use super::canvas::{Canvas, Tool, ToolOptions};
 use super::icons::tool_icon;
 use super::model::*;
 use super::{redact, session};
-use crate::app::Omashot;
+use crate::app::Omacapture;
 use crate::capture::Frame;
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
@@ -15,7 +15,7 @@ use std::rc::Rc;
 pub struct EditorWindow {
     pub win: adw::ApplicationWindow,
     pub canvas: Canvas,
-    gb: Rc<Omashot>,
+    gb: Rc<Omacapture>,
     source: RefCell<Option<PathBuf>>,
     props: Props,
     sidebar: Sidebar,
@@ -118,7 +118,7 @@ const CANVAS_ASPECTS: [(&str, Option<(f64, f64)>); 5] =
     [("Auto", None), ("1:1", Some((1.0, 1.0))), ("4:3", Some((4.0, 3.0))), ("3:2", Some((3.0, 2.0))), ("16:9", Some((16.0, 9.0)))];
 
 impl EditorWindow {
-    pub fn open(gb: &Rc<Omashot>, frame: Frame, source: Option<PathBuf>) -> Rc<Self> {
+    pub fn open(gb: &Rc<Omacapture>, frame: Frame, source: Option<PathBuf>) -> Rc<Self> {
         let cfg = gb.config.get();
         // Restore an editable session when the file has one.
         let (frame, sheet) = match source.as_deref().and_then(session::load) {
@@ -154,7 +154,7 @@ impl EditorWindow {
             .default_height(800)
             .title(Self::title_for(source.as_deref()))
             .build();
-        win.add_css_class("omashot-window");
+        win.add_css_class("omacapture-window");
 
         let toast = adw::ToastOverlay::new();
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -418,8 +418,8 @@ impl EditorWindow {
 
     fn title_for(source: Option<&std::path::Path>) -> String {
         match source.and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()) {
-            Some(n) => format!("{n} — Omashot"),
-            None => "Untitled — Omashot".into(),
+            Some(n) => format!("{n} — Omacapture"),
+            None => "Untitled — Omacapture".into(),
         }
     }
 

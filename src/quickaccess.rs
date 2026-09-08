@@ -7,7 +7,7 @@
 //! handled without touching the mouse; those binds are removed the moment the
 //! last card goes away.
 
-use crate::app::Omashot;
+use crate::app::Omacapture;
 use crate::capture::Frame;
 use crate::config::Corner;
 use gtk::prelude::*;
@@ -78,7 +78,7 @@ impl QuickAccessPanel {
         Self { window: None, stack: None, cards: Vec::new(), global_binds_active: false }
     }
 
-    fn ensure_window(&mut self, gb: &Rc<Omashot>) -> gtk::Box {
+    fn ensure_window(&mut self, gb: &Rc<Omacapture>) -> gtk::Box {
         if let Some(s) = &self.stack {
             return s.clone();
         }
@@ -87,7 +87,7 @@ impl QuickAccessPanel {
         window.set_application(Some(&gb.app));
         window.init_layer_shell();
         window.set_layer(Layer::Overlay);
-        window.set_namespace(Some("omashot-quickaccess"));
+        window.set_namespace(Some("omacapture-quickaccess"));
         // Keyboard is taken only while a card is hovered (see build_card).
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_exclusive_zone(0);
@@ -101,7 +101,7 @@ impl QuickAccessPanel {
         window.set_anchor(h, true);
         window.set_margin(v, 16);
         window.set_margin(h, 16);
-        window.add_css_class("omashot-quickaccess");
+        window.add_css_class("omacapture-quickaccess");
         let stack = gtk::Box::new(gtk::Orientation::Vertical, 10);
         stack.set_valign(if matches!(v, Edge::Bottom) { gtk::Align::End } else { gtk::Align::Start });
         window.set_child(Some(&stack));
@@ -143,7 +143,7 @@ impl QuickAccessPanel {
         stack
     }
 
-    pub fn push(&mut self, gb: &Rc<Omashot>, frame: Frame, path: PathBuf, is_saved: bool) {
+    pub fn push(&mut self, gb: &Rc<Omacapture>, frame: Frame, path: PathBuf, is_saved: bool) {
         let cfg = gb.config.get().quick_access;
         let stack = self.ensure_window(gb);
         while self.cards.len() >= cfg.max_cards.max(1) {
@@ -173,7 +173,7 @@ impl QuickAccessPanel {
         true
     }
 
-    /// Run an action on the newest card (hotkeys, `omashot qa <action>`, IPC).
+    /// Run an action on the newest card (hotkeys, `omacapture qa <action>`, IPC).
     pub fn act(&self, action: QaAction) -> bool {
         match self.cards.last() {
             Some(card) => {
@@ -237,13 +237,14 @@ fn register_global_binds(sc: &crate::config::QuickAccessShortcuts) -> bool {
         if chord.is_empty() || crate::config::validate_chord(chord).is_err() {
             continue;
         }
-        entries.push(format!("  hl.bind(\"{chord}\", hl.dsp.exec_cmd(\"{exe} qa {action}\"), {{ description = \"Omashot: {label}\" }}),"));
+        entries
+            .push(format!("  hl.bind(\"{chord}\", hl.dsp.exec_cmd(\"{exe} qa {action}\"), {{ description = \"Omacapture: {label}\" }}),"));
     }
     if entries.is_empty() {
         return false;
     }
     let lua = format!(
-        "if omashot_qa_binds then for _, b in ipairs(omashot_qa_binds) do pcall(function() b:unbind() end) end end\nomashot_qa_binds = {{\n{}\n}}\nreturn \"ok\"",
+        "if omacapture_qa_binds then for _, b in ipairs(omacapture_qa_binds) do pcall(function() b:unbind() end) end end\nomacapture_qa_binds = {{\n{}\n}}\nreturn \"ok\"",
         entries.join("\n")
     );
     let ok = std::process::Command::new("hyprctl")
@@ -263,7 +264,7 @@ fn unregister_global_binds() {
     let _ = std::process::Command::new("hyprctl")
         .args([
             "eval",
-            "if omashot_qa_binds then for _, b in ipairs(omashot_qa_binds) do pcall(function() b:unbind() end) end; omashot_qa_binds = nil end; return \"ok\"",
+            "if omacapture_qa_binds then for _, b in ipairs(omacapture_qa_binds) do pcall(function() b:unbind() end) end; omacapture_qa_binds = nil end; return \"ok\"",
         ])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -279,7 +280,7 @@ fn thumbnail(frame: &Frame, width: i32) -> (gtk::gdk::Texture, i32, i32) {
 }
 
 fn build_card(
-    gb: &Rc<Omashot>,
+    gb: &Rc<Omacapture>,
     frame: Frame,
     path: PathBuf,
     is_saved: bool,
