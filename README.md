@@ -179,7 +179,13 @@ The widget setting `clickMode` lives in `~/.config/omarchy/shell.json` under the
 
 ## MCP server for agents
 
-`omacapture mcp` speaks the Model Context Protocol over stdio and needs no display of its own. Register it in Claude Code (the repo ships a `.mcp.json`) or any MCP client:
+`omacapture mcp` speaks the Model Context Protocol over stdio and needs no display of its own. Nothing registers it for you; installing the plugin never touches an agent's configuration. Opt in per client, for example in Claude Code:
+
+```sh
+claude mcp add --scope user omacapture -- omacapture mcp
+```
+
+or in any MCP client's server list:
 
 ```json
 { "mcpServers": { "omacapture": { "command": "omacapture", "args": ["mcp"] } } }
@@ -238,6 +244,6 @@ omarchy-shell shell rescanPlugins             # hot-reload QML after edits
 cargo build --release --manifest-path tools/wlptr/Cargo.toml   # dev-only virtual pointer for live gesture tests; not part of the install
 ```
 
-`.mcp.json` at the repo root registers the MCP server for Claude Code when the checkout is opened as a project; it does nothing otherwise.
+
 
 See `docs/SPEC.md` for the behavioral specification.

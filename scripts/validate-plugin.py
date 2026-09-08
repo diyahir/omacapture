@@ -58,6 +58,11 @@ if "omarchy plugin add" not in readme:
 if "omarchy plugin remove" not in readme:
     fail("README.md must contain removal instructions (omarchy plugin remove ...)")
 
+# --- no implicit agent/tool configuration in the installable payload -------
+for forbidden in [".mcp.json", ".cursor", ".claude/settings.json", ".vscode/mcp.json"]:
+    if (root / forbidden).exists():
+        fail(f"{forbidden} must not ship in the plugin payload (marketplace review: it would configure agents implicitly)")
+
 # --- symlinks (rejected by the shell) -------------------------------------
 tracked = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True, check=True).stdout.decode().split("\0")
 for rel in filter(None, tracked):
