@@ -291,6 +291,13 @@ pub fn open(gb: &Rc<Omashot>) {
         }));
         let gb = outer.clone();
         g_qa.add(&switch_row(
+            "Hover-free shortcuts",
+            Some("Register the global chords below with Hyprland while a card is showing"),
+            cfg.quick_access.global_shortcuts,
+            move |v| gb.config.update(|c| c.quick_access.global_shortcuts = v),
+        ));
+        let gb = outer.clone();
+        g_qa.add(&switch_row(
             "Keep editing after drag",
             Some("Leave the editor open after dragging into another app"),
             cfg.quick_access.keep_editing_after_drag,
