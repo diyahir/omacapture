@@ -49,7 +49,7 @@ cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omashot
 omarchy-shell omashot recheck
 ```
 
-`cargo install` puts `omashot` in `~/.cargo/bin`, which Omarchy already has on `PATH`. The widget appears in the bar's right section; move it with `omarchy bar move io.github.diyaclanker.omashot --section center`.
+`cargo install` puts `omashot` in `~/.cargo/bin`; the plugin looks there (and in `~/.local/bin`) itself, so it works even though the shell's own `PATH` does not include it. The widget appears in the bar's right section; move it with `omarchy bar move io.github.diyaclanker.omashot --section center`.
 
 ## Use
 
@@ -192,6 +192,14 @@ The image above was produced entirely by an agent: one `capture_window` call, th
 `annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed.
 
 **What an agent can and cannot do.** Tools that take an output path only write `.png`, `.jpg`, or `.webp`, only inside your save folder, the private capture cache, the source image's own folder, or directories you list under `[mcp] allowed_write_dirs`, and never replace an existing file unless `overwrite: true` is passed. `set_config` cannot change the save folder or the `[mcp]` section, so an agent cannot widen its own fence. Run `omashot mcp --read-only` to expose only capture, OCR, read, and list tools: captures then go to the private cache and nothing user-named is ever written. Scratch captures live in `~/.local/share/omashot/captures` with owner-only permissions and are swept with the history retention window. There is no network access anywhere.
+
+## Update
+
+```sh
+omarchy plugin update io.github.diyaclanker.omashot
+cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omashot
+omarchy restart shell        # services load at shell start; bar widgets hot-reload on their own
+```
 
 ## Remove
 

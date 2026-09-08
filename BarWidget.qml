@@ -43,7 +43,8 @@ BarWidget {
 
   function capture(mode) {
     root.close()
-    Util.execDetached(Model.commandFor(mode))
+    // Route through the service, which knows where the binary was installed.
+    Util.execArgv(["omarchy-shell", "omashot", mode])
   }
 
   implicitWidth: button.implicitWidth

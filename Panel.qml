@@ -39,7 +39,7 @@ Panel {
   function run(index) {
     var action = root.actions[Math.max(0, Math.min(index, root.actions.length - 1))]
     root.close()
-    Util.execDetached(action.command)
+    Util.execArgv(["omarchy-shell", "omashot", action.id])
   }
 
   function moveCursor(delta) {
