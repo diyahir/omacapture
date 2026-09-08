@@ -1,4 +1,12 @@
+pub mod canvas;
+pub mod effects;
+pub mod icons;
+pub mod model;
 pub mod preferences;
+pub mod redact;
+pub mod render;
+pub mod session;
+pub mod window;
 
 use crate::app::Grabbit;
 use crate::capture::Frame;
@@ -6,8 +14,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 pub fn open(gb: &Rc<Grabbit>, frame: Frame, source: Option<PathBuf>) {
-    let _ = (gb, frame, source);
-    tracing::warn!("annotate editor not implemented yet");
+    window::EditorWindow::open(gb, frame, source);
 }
 
 pub fn open_file(gb: &Rc<Grabbit>, path: &Path) {

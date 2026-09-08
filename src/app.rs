@@ -17,6 +17,8 @@ pub struct Grabbit {
     pub history: RefCell<History>,
     pub quick_access: RefCell<QuickAccessPanel>,
     pub last_area: RefCell<Option<Rect>>,
+    /// `--wait`: print a JSON result line to stdout when the capture completes, then quit.
+    pub wait_mode: std::cell::Cell<bool>,
     _hold: RefCell<Option<gio::ApplicationHoldGuard>>,
 }
 
@@ -30,7 +32,12 @@ pub fn instance() -> Rc<Grabbit> {
 
 pub fn run() -> glib::ExitCode {
     crate::paths::ensure_dirs();
-    let app = adw::Application::new(Some(crate::paths::APP_ID), gio::ApplicationFlags::HANDLES_COMMAND_LINE);
+    let wait = std::env::args().any(|a| a == "--wait");
+    let mut flags = gio::ApplicationFlags::HANDLES_COMMAND_LINE;
+    if wait {
+        flags |= gio::ApplicationFlags::NON_UNIQUE;
+    }
+    let app = adw::Application::new(Some(crate::paths::APP_ID), flags);
 
     app.connect_startup(|app| {
         load_css();
@@ -43,6 +50,7 @@ pub fn run() -> glib::ExitCode {
             history: RefCell::new(history),
             quick_access: RefCell::new(QuickAccessPanel::new()),
             last_area: RefCell::new(None),
+            wait_mode: std::cell::Cell::new(false),
             _hold: RefCell::new(None),
         });
         INSTANCE.with(|i| *i.borrow_mut() = Some(gb));
@@ -58,6 +66,9 @@ pub fn run() -> glib::ExitCode {
             }
         };
         let gb = instance();
+        if cli.wait {
+            gb.wait_mode.set(true);
+        }
         dispatch(&gb, cli.command.unwrap_or(Command::Area { annotate: false }));
         let _ = app;
         glib::ExitCode::SUCCESS
@@ -88,7 +99,22 @@ pub fn dispatch(gb: &Rc<Grabbit>, cmd: Command) {
         Command::Annotate { file } => crate::annotate::open_file(gb, &file),
         Command::History => crate::history::browser::open(gb),
         Command::Settings => crate::annotate::preferences::open(gb),
+        Command::Mcp => {}
     }
+}
+
+/// In `--wait` mode, report a finished capture on stdout and exit.
+pub fn report_wait_result(gb: &Rc<Grabbit>, path: Option<&std::path::Path>, width: u32, height: u32) {
+    if !gb.wait_mode.get() {
+        return;
+    }
+    let v = match path {
+        Some(p) => serde_json::json!({"path": p, "width": width, "height": height}),
+        None => serde_json::json!({"cancelled": true}),
+    };
+    println!("{v}");
+    let app = gb.app.clone();
+    glib::idle_add_local_once(move || app.quit());
 }
 
 fn with_delay(gb: &Rc<Grabbit>, f: impl FnOnce() + 'static) {
@@ -136,9 +162,12 @@ fn start_pick(gb: &Rc<Grabbit>, mode: overlay::PickMode, on_frame: impl FnOnce(&
     let hold = gb.app.hold();
     let gb2 = gb.clone();
     overlay::pick(&gb.app, mode, cfg.general.include_cursor, remembered, move |sel| {
-        if let Some(sel) = sel {
-            *gb2.last_area.borrow_mut() = Some(sel.rect);
-            on_frame(&gb2, sel.frame, sel.rect);
+        match sel {
+            Some(sel) => {
+                *gb2.last_area.borrow_mut() = Some(sel.rect);
+                on_frame(&gb2, sel.frame, sel.rect);
+            }
+            None => report_wait_result(&gb2, None, 0, 0),
         }
         drop(hold);
     });

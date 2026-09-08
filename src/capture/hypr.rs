@@ -85,6 +85,13 @@ pub fn visible_windows() -> Result<Vec<Client>> {
     Ok(clients)
 }
 
+/// Every mapped window on any workspace.
+pub fn all_windows() -> Result<Vec<Client>> {
+    let mut clients: Vec<Client> = hyprctl::<Vec<Client>>("clients")?.into_iter().filter(|c| c.mapped && c.size[0] > 0).collect();
+    clients.sort_by_key(|c| (c.workspace.id, !c.floating, c.focus_history_id));
+    Ok(clients)
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct CursorPos {
     pub x: i32,

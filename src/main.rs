@@ -10,6 +10,7 @@ mod paths;
 mod postcapture;
 mod quickaccess;
 mod annotate;
+mod mcp;
 
 use clap::{Parser, Subcommand};
 
@@ -17,6 +18,9 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug, Clone)]
 #[command(name = "grabbit", version, about)]
 pub struct Cli {
+    /// Run as an independent instance, block until the capture finishes, and print a JSON result line.
+    #[arg(long, global = true)]
+    pub wait: bool,
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -43,6 +47,8 @@ pub enum Command {
     Settings,
     /// Run the resident daemon so hotkeys respond instantly.
     Daemon,
+    /// Serve the Model Context Protocol over stdio for AI agents.
+    Mcp,
 }
 
 fn main() -> glib::ExitCode {
@@ -53,5 +59,17 @@ fn main() -> glib::ExitCode {
         )
         .with_writer(std::io::stderr)
         .init();
+    // Headless subcommands never touch GTK.
+    if let Ok(cli) = Cli::try_parse() {
+        if matches!(cli.command, Some(Command::Mcp)) {
+            return match mcp::run() {
+                Ok(()) => glib::ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("mcp: {e}");
+                    glib::ExitCode::FAILURE
+                }
+            };
+        }
+    }
     app::run()
 }

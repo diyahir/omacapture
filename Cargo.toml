@@ -26,6 +26,8 @@ anyhow = "1"
 dirs = "6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+regex = "1"
+base64 = "0.22"
 
 [profile.release]
 opt-level = 3

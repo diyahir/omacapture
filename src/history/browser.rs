@@ -1,6 +1,7 @@
 //! History browser window.
 
 use crate::app::Grabbit;
+use adw::prelude::*;
 use gtk::prelude::*;
 use std::rc::Rc;
 
@@ -33,7 +34,7 @@ pub fn open(gb: &Rc<Grabbit>) {
     scroller.set_vexpand(true);
     scroller.set_child(Some(&flow));
     content.append(&scroller);
-    win.set_child(Some(&content));
+    win.set_content(Some(&content));
 
     let populate = {
         let gb = gb.clone();

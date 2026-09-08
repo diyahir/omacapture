@@ -54,7 +54,7 @@ pub fn run_actions(gb: &Rc<Grabbit>, frame: Frame, actions: AfterCapture, allow_
 
     // Quick Access needs a file on disk to drag or open; fall back to a temp file.
     let file_for_panel = saved_path.clone().or_else(|| {
-        if actions.quick_access || (actions.annotate && allow_annotate) {
+        if actions.quick_access || (actions.annotate && allow_annotate) || gb.wait_mode.get() {
             crate::export::write_temp_png(&frame.image).ok()
         } else {
             None
@@ -63,6 +63,9 @@ pub fn run_actions(gb: &Rc<Grabbit>, frame: Frame, actions: AfterCapture, allow_
 
     if actions.annotate && allow_annotate {
         crate::annotate::open(gb, frame.clone(), saved_path.clone());
+    } else if gb.wait_mode.get() {
+        crate::app::report_wait_result(gb, file_for_panel.as_deref(), frame.width(), frame.height());
+        return Outcome { saved_path };
     }
     if actions.quick_access && cfg.quick_access.enabled {
         if let Some(path) = file_for_panel.clone() {
