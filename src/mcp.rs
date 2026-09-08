@@ -1,4 +1,4 @@
-//! MCP (Model Context Protocol) server over stdio so agents can drive Omashot.
+//! MCP (Model Context Protocol) server over stdio so agents can drive Omacapture.
 //!
 //! Runs without GTK: captures go through grim, OCR through tesseract, and
 //! rendering through the cairo-based annotation renderer. Interactive
@@ -91,8 +91,8 @@ fn handle(method: &str, params: &Value) -> Result<Value> {
         "initialize" => Ok(json!({
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "omashot", "version": env!("CARGO_PKG_VERSION")},
-            "instructions": "Omashot captures screenshots on a Wayland/Hyprland desktop and annotates images. \
+            "serverInfo": {"name": "omacapture", "version": env!("CARGO_PKG_VERSION")},
+            "instructions": "Omacapture captures screenshots on a Wayland/Hyprland desktop and annotates images. \
                 Use list_windows/list_monitors to discover targets, capture_* to grab pixels (images are returned \
                 downscaled unless max_width is raised; the full-resolution file path is always returned), ocr to read \
                 text, annotate to draw markup onto an image file, and open_editor to hand an image to the human."
@@ -239,23 +239,23 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "get_config",
-            "description": "Read Omashot's configuration (~/.config/omashot/config.toml): every key with its current value, as TOML plus JSON. Sections: general (save_folder, filename_pattern, format, quality, include_cursor, sound, notifications, remember_last_area, delay_ms), post_capture (fullscreen/area/window/annotate_export each with save, copy, quick_access, annotate), quick_access (enabled, corner, auto_dismiss_secs, max_cards, thumbnail_width, keep_editing_after_drag), annotate (stroke_color, stroke_width, font_family, font_size, blur_style, blur_strength, watermark_text, ...), history (enabled, retention_days, max_entries), ocr (languages, copy_to_clipboard).",
+            "description": "Read Omacapture's configuration (~/.config/omacapture/config.toml): every key with its current value, as TOML plus JSON. Sections: general (save_folder, filename_pattern, format, quality, include_cursor, sound, notifications, remember_last_area, delay_ms), post_capture (fullscreen/area/window/annotate_export each with save, copy, quick_access, annotate), quick_access (enabled, corner, auto_dismiss_secs, max_cards, thumbnail_width, keep_editing_after_drag), annotate (stroke_color, stroke_width, font_family, font_size, blur_style, blur_strength, watermark_text, ...), history (enabled, retention_days, max_entries), ocr (languages, copy_to_clipboard).",
             "inputSchema": {"type":"object","properties":{}}
         }),
         json!({
             "name": "set_config",
-            "description": "Change Omashot settings. Pass a partial object nested by section, e.g. {\"general\":{\"format\":\"jpg\",\"quality\":85},\"quick_access\":{\"corner\":\"top-right\"}}. Unknown keys or invalid values are rejected and nothing is written. The running app reloads the file immediately.",
+            "description": "Change Omacapture settings. Pass a partial object nested by section, e.g. {\"general\":{\"format\":\"jpg\",\"quality\":85},\"quick_access\":{\"corner\":\"top-right\"}}. Unknown keys or invalid values are rejected and nothing is written. The running app reloads the file immediately.",
             "inputSchema": {"type":"object","required":["changes"],"properties":{
                 "changes":{"type":"object","description":"Partial config, nested by section"}}}
         }),
         json!({
             "name": "history_list",
-            "description": "List recent captures from Omashot's history.",
+            "description": "List recent captures from Omacapture's history.",
             "inputSchema": {"type":"object","properties":{"limit":{"type":"integer","default":20},"search":{"type":"string"}}}
         }),
         json!({
             "name": "open_editor",
-            "description": "Open an image in Omashot's annotation editor for the human. Returns immediately.",
+            "description": "Open an image in Omacapture's annotation editor for the human. Returns immediately.",
             "inputSchema": {"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}
         }),
         json!({
@@ -843,7 +843,7 @@ fn redact_tool(args: &Value) -> Result<Vec<Value>> {
     Ok(content)
 }
 
-const ANNOTATION_REFERENCE: &str = r##"Omashot annotation items (coordinates in source-image pixels, origin top-left).
+const ANNOTATION_REFERENCE: &str = r##"Omacapture annotation items (coordinates in source-image pixels, origin top-left).
 
 Common optional fields on every item: color (hex, default theme red), stroke_width (1-20, default 3),
 line_style (solid|dashed|dotted), corner_radius, font_size (default 16), opacity, rotation (degrees).

@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.diyaclanker.omashot",
-  "name": "Omashot",
+  "id": "io.github.diyaclanker.omacapture",
+  "name": "Omacapture",
   "version": "0.1.0",
   "author": "diyaclanker",
   "license": "BSD-3-Clause",
   "description": "Screenshot capture and annotation editor for Omarchy: frozen-screen region picker, shapes, arrows, text, blur, OCR, Quick Access cards, history, and an MCP server for agents.",
-  "homepage": "https://github.com/diyahir/omashot",
+  "homepage": "https://github.com/diyahir/omacapture",
   "kinds": ["bar-widget", "service"],
   "entryPoints": {
     "barWidget": "BarWidget.qml",
@@ -14,7 +14,7 @@
   },
   "keepLoaded": true,
   "barWidget": {
-    "displayName": "Omashot",
+    "displayName": "Omacapture",
     "description": "Screenshot button: click to capture a region, right-click for all capture modes",
     "category": "Utilities",
     "allowMultiple": false,

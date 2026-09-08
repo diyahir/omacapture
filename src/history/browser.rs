@@ -1,10 +1,10 @@
 //! History browser window.
 
-use crate::app::Omashot;
+use crate::app::Omacapture;
 use adw::prelude::*;
 use std::rc::Rc;
 
-pub fn open(gb: &Rc<Omashot>) {
+pub fn open(gb: &Rc<Omacapture>) {
     let win =
         adw::ApplicationWindow::builder().application(&gb.app).title("Capture History").default_width(900).default_height(600).build();
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);

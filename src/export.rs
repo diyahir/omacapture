@@ -87,7 +87,7 @@ pub fn write_temp_png(img: &RgbaImage) -> Result<PathBuf> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
     crate::paths::ensure_dirs();
-    let name = format!("omashot-{}.png", chrono::Local::now().format("%Y%m%d-%H%M%S-%3f"));
+    let name = format!("omacapture-{}.png", chrono::Local::now().format("%Y%m%d-%H%M%S-%3f"));
     let path = crate::paths::temp_dir().join(name);
     // Owner-only and never follows a pre-planted symlink.
     let mut f = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path)?;

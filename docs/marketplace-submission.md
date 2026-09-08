@@ -1,5 +1,5 @@
 ### Repository URL
-https://github.com/diyahir/omashot
+https://github.com/diyahir/omacapture
 
 ### Category
 Productivity
@@ -11,7 +11,7 @@ hyprland, quickshell, system
 screenshots
 
 ### Maintainer notes
-The shell plugin (bar widget + service) only launches a native `omashot` binary that the user builds from the same repository with `cargo install --path` (no remote git, no bundled binaries, no sudo). Runtime dependencies are documented in the README: gtk4, libadwaita, gtk4-layer-shell, grim, wl-clipboard; tesseract is optional for OCR. Everything runs locally; there is no network access. The plugin never edits Hyprland or shell configuration; keybinding and menu snippets are documented for the user to add.
+The shell plugin (bar widget + service) only launches a native `omacapture` binary that the user builds from the same repository with `cargo install --path` (no remote git, no bundled binaries, no sudo). Runtime dependencies are documented in the README: gtk4, libadwaita, gtk4-layer-shell, grim, wl-clipboard; tesseract is optional for OCR. Everything runs locally; there is no network access. The plugin never edits Hyprland or shell configuration; keybinding and menu snippets are documented for the user to add.
 
 ### Submission checklist
 

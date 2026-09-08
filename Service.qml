@@ -4,12 +4,12 @@ import Quickshell.Io
 import qs.Commons
 import "Model.js" as Model
 
-// Headless service: resolves where the omashot binary lives (cargo install
+// Headless service: resolves where the omacapture binary lives (cargo install
 // puts it in ~/.cargo/bin, which is not on omarchy-shell's PATH), keeps the
 // daemon resident so the capture hotkey responds instantly, and exposes an
 // IPC target so keybindings, the bar widget, and scripts trigger captures
 // through the shell:
-//   omarchy-shell omashot area | window | full | annotate | ocr | history | settings
+//   omarchy-shell omacapture area | window | full | annotate | ocr | history | settings
 Item {
   id: root
 
@@ -25,7 +25,7 @@ Item {
     // Only report "missing" once the probe has actually run and failed;
     // right after a plugin reload the probe may still be in flight.
     if (root.checked && !root.installed) {
-      Util.execArgv(["omarchy-notification-send", "Omashot is not installed", "Build the omashot binary with the step from the plugin README, then run: omarchy-shell omashot recheck"])
+      Util.execArgv(["omarchy-notification-send", "Omacapture is not installed", "Build the omacapture binary with the step from the plugin README, then run: omarchy-shell omacapture recheck"])
       return "missing"
     }
     Util.execArgv(Model.argvFor(root.binary, mode))
@@ -65,7 +65,7 @@ Item {
   Component.onCompleted: probe.running = true
 
   IpcHandler {
-    target: "omashot"
+    target: "omacapture"
 
     function status(): string {
       return JSON.stringify({ installed: root.installed, checked: root.checked, daemon: daemon.running, binary: root.binary })

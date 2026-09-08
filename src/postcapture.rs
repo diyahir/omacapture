@@ -1,6 +1,6 @@
 //! Routes a finished capture through the configured action matrix.
 
-use crate::app::Omashot;
+use crate::app::Omacapture;
 use crate::capture::{CaptureMode, Frame};
 use crate::config::AfterCapture;
 use gtk::prelude::*;
@@ -12,7 +12,7 @@ pub struct Outcome {
     pub saved_path: Option<PathBuf>,
 }
 
-pub fn handle(gb: &Rc<Omashot>, frame: Frame, mode: CaptureMode) -> Outcome {
+pub fn handle(gb: &Rc<Omacapture>, frame: Frame, mode: CaptureMode) -> Outcome {
     let cfg = gb.config.get();
     let actions: AfterCapture = match mode {
         CaptureMode::Fullscreen => cfg.post_capture.fullscreen,
@@ -23,7 +23,7 @@ pub fn handle(gb: &Rc<Omashot>, frame: Frame, mode: CaptureMode) -> Outcome {
     run_actions(gb, frame, actions, mode != CaptureMode::AnnotateExport)
 }
 
-pub fn run_actions(gb: &Rc<Omashot>, frame: Frame, actions: AfterCapture, allow_annotate: bool) -> Outcome {
+pub fn run_actions(gb: &Rc<Omacapture>, frame: Frame, actions: AfterCapture, allow_annotate: bool) -> Outcome {
     let cfg = gb.config.get();
     let mut saved_path = None;
 

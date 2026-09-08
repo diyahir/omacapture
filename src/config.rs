@@ -1,4 +1,4 @@
-//! User configuration, persisted at `~/.config/omashot/config.toml`.
+//! User configuration, persisted at `~/.config/omacapture/config.toml`.
 
 use anyhow::Result;
 use gtk::{gio, glib};

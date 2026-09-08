@@ -949,7 +949,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "omashot"
+name = "omacapture"
 version = "0.1.0"
 dependencies = [
  "anyhow",

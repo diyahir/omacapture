@@ -1,6 +1,6 @@
 //! Preferences window backed by the TOML config.
 
-use crate::app::Omashot;
+use crate::app::Omacapture;
 use crate::config::{AfterCapture, Corner, ImageFormat};
 use adw::prelude::*;
 use gtk::{gio, glib};
@@ -55,7 +55,7 @@ fn combo_row(title: &str, items: &[&str], selected: u32, on_change: impl Fn(u32)
 }
 
 fn matrix_group(
-    gb: &Rc<Omashot>,
+    gb: &Rc<Omacapture>,
     title: &str,
     get: fn(&crate::config::Config) -> AfterCapture,
     set: fn(&mut crate::config::Config, AfterCapture),
@@ -80,13 +80,17 @@ fn matrix_group(
     group
 }
 
-pub fn open(gb: &Rc<Omashot>) {
+pub fn open(gb: &Rc<Omacapture>) {
     let outer = gb.clone();
     let cfg = gb.config.get();
     // Categories in a side list, the selected page in the main panel.
-    let win =
-        adw::ApplicationWindow::builder().application(&gb.app).title("Omashot Preferences").default_width(860).default_height(640).build();
-    win.add_css_class("omashot-window");
+    let win = adw::ApplicationWindow::builder()
+        .application(&gb.app)
+        .title("Omacapture Preferences")
+        .default_width(860)
+        .default_height(640)
+        .build();
+    win.add_css_class("omacapture-window");
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let header = adw::HeaderBar::new();
     root.append(&header);
@@ -434,7 +438,7 @@ pub fn open(gb: &Rc<Omashot>) {
             let file = crate::keybinds::bindings_file();
             let installed = crate::keybinds::is_installed(&file);
             let taken = crate::keybinds::conflicts(preset);
-            let mut text = if installed { "Omashot block is installed".to_string() } else { "Not installed".to_string() };
+            let mut text = if installed { "Omacapture block is installed".to_string() } else { "Not installed".to_string() };
             if !taken.is_empty() {
                 text.push_str(&format!(" · already bound: {}", taken.join(", ")));
             }
@@ -469,7 +473,7 @@ pub fn open(gb: &Rc<Omashot>) {
             } else {
                 let dialog = adw::AlertDialog::new(
                     Some("Keys already bound"),
-                    Some(&format!("{}\n\nInstall anyway? Hyprland uses the last definition, so Omashot would win.", taken.join("\n"))),
+                    Some(&format!("{}\n\nInstall anyway? Hyprland uses the last definition, so Omacapture would win.", taken.join("\n"))),
                 );
                 dialog.add_responses(&[("cancel", "Cancel"), ("install", "Install anyway")]);
                 dialog.set_response_appearance("install", adw::ResponseAppearance::Suggested);
@@ -499,7 +503,7 @@ pub fn open(gb: &Rc<Omashot>) {
     let g_keys = adw::PreferencesGroup::new();
     g_keys.set_title("Or add them by hand");
     g_keys.set_description(Some("Global shortcuts belong to Hyprland. Paste this into ~/.config/hypr/bindings.lua; it reloads on save."));
-    let exe = std::env::current_exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| "omashot".into());
+    let exe = std::env::current_exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| "omacapture".into());
     let _ = exe;
     let snippet = format!("{}\n", crate::keybinds::block(crate::keybinds::Preset::SuperI));
     let view = gtk::TextView::new();

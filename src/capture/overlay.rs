@@ -104,7 +104,7 @@ pub fn pick(
         window.set_application(Some(app));
         window.init_layer_shell();
         window.set_layer(Layer::Overlay);
-        window.set_namespace(Some("omashot-overlay"));
+        window.set_namespace(Some("omacapture-overlay"));
         window.set_monitor(Some(monitor));
         for edge in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
             window.set_anchor(edge, true);
@@ -112,7 +112,7 @@ pub fn pick(
         window.set_exclusive_zone(-1);
         window.set_keyboard_mode(KeyboardMode::Exclusive);
         window.set_decorated(false);
-        window.add_css_class("omashot-overlay");
+        window.add_css_class("omacapture-overlay");
 
         let area = gtk::DrawingArea::new();
         area.set_hexpand(true);

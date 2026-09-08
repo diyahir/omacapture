@@ -11,7 +11,7 @@ use gtk::{gio, glib};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub struct Omashot {
+pub struct Omacapture {
     pub app: adw::Application,
     pub config: ConfigHandle,
     pub history: RefCell<History>,
@@ -24,10 +24,10 @@ pub struct Omashot {
 }
 
 thread_local! {
-    static INSTANCE: RefCell<Option<Rc<Omashot>>> = const { RefCell::new(None) };
+    static INSTANCE: RefCell<Option<Rc<Omacapture>>> = const { RefCell::new(None) };
 }
 
-pub fn instance() -> Rc<Omashot> {
+pub fn instance() -> Rc<Omacapture> {
     INSTANCE.with(|i| i.borrow().clone().expect("app not started"))
 }
 
@@ -48,7 +48,7 @@ pub fn run() -> glib::ExitCode {
         crate::paths::sweep_temp(config.history.retention_days.max(1));
         let config_handle = ConfigHandle::new(config);
         let config_monitor = config_handle.watch();
-        let gb = Rc::new(Omashot {
+        let gb = Rc::new(Omacapture {
             app: app.clone(),
             config: config_handle,
             history: RefCell::new(history),
@@ -82,7 +82,7 @@ pub fn run() -> glib::ExitCode {
     app.run()
 }
 
-pub fn dispatch(gb: &Rc<Omashot>, cmd: Command) {
+pub fn dispatch(gb: &Rc<Omacapture>, cmd: Command) {
     tracing::debug!("dispatch {cmd:?}");
     match cmd {
         Command::Daemon => {
@@ -106,7 +106,7 @@ pub fn dispatch(gb: &Rc<Omashot>, cmd: Command) {
 }
 
 /// In `--wait` mode, report a finished capture on stdout and exit.
-pub fn report_wait_result(gb: &Rc<Omashot>, path: Option<&std::path::Path>, width: u32, height: u32) {
+pub fn report_wait_result(gb: &Rc<Omacapture>, path: Option<&std::path::Path>, width: u32, height: u32) {
     if !gb.wait_mode.get() {
         return;
     }
@@ -119,7 +119,7 @@ pub fn report_wait_result(gb: &Rc<Omashot>, path: Option<&std::path::Path>, widt
     glib::idle_add_local_once(move || app.quit());
 }
 
-fn with_delay(gb: &Rc<Omashot>, f: impl FnOnce() + 'static) {
+fn with_delay(gb: &Rc<Omacapture>, f: impl FnOnce() + 'static) {
     let delay = gb.config.get().general.delay_ms;
     if delay == 0 {
         f();
@@ -132,7 +132,7 @@ fn with_delay(gb: &Rc<Omashot>, f: impl FnOnce() + 'static) {
     }
 }
 
-fn capture_fullscreen(gb: &Rc<Omashot>) {
+fn capture_fullscreen(gb: &Rc<Omacapture>) {
     let gb = gb.clone();
     with_delay(&gb.clone(), move || {
         let cfg = gb.config.get();
@@ -158,7 +158,7 @@ fn capture_fullscreen(gb: &Rc<Omashot>) {
     });
 }
 
-fn start_pick(gb: &Rc<Omashot>, mode: overlay::PickMode, on_frame: impl FnOnce(&Rc<Omashot>, Frame, Rect) + 'static) {
+fn start_pick(gb: &Rc<Omacapture>, mode: overlay::PickMode, on_frame: impl FnOnce(&Rc<Omacapture>, Frame, Rect) + 'static) {
     let cfg = gb.config.get();
     let remembered = if cfg.general.remember_last_area { *gb.last_area.borrow() } else { None };
     let hold = gb.app.hold();
@@ -175,7 +175,7 @@ fn start_pick(gb: &Rc<Omashot>, mode: overlay::PickMode, on_frame: impl FnOnce(&
     });
 }
 
-fn capture_area(gb: &Rc<Omashot>, inline_annotate: bool) {
+fn capture_area(gb: &Rc<Omacapture>, inline_annotate: bool) {
     let gb = gb.clone();
     with_delay(&gb.clone(), move || {
         start_pick(&gb, overlay::PickMode::Region, move |gb, frame, _| {
@@ -188,7 +188,7 @@ fn capture_area(gb: &Rc<Omashot>, inline_annotate: bool) {
     });
 }
 
-fn capture_window(gb: &Rc<Omashot>) {
+fn capture_window(gb: &Rc<Omacapture>) {
     let gb = gb.clone();
     with_delay(&gb.clone(), move || {
         start_pick(&gb, overlay::PickMode::Window, |gb, frame, _| {
@@ -197,7 +197,7 @@ fn capture_window(gb: &Rc<Omashot>) {
     });
 }
 
-fn capture_ocr(gb: &Rc<Omashot>) {
+fn capture_ocr(gb: &Rc<Omacapture>) {
     let gb = gb.clone();
     start_pick(&gb.clone(), overlay::PickMode::Region, move |gb, frame, _| {
         let cfg = gb.config.get();

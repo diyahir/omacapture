@@ -1,8 +1,8 @@
-# Omashot
+# Omacapture
 
 Screenshot capture and annotation for [Omarchy](https://omarchy.org). A bar widget and shell service wrap a native Rust + GTK4 app: a frozen-screen region picker, a full annotation editor, Quick Access cards, capture history, OCR, and an MCP server so AI agents can take, mark up, and configure screenshots too. Everything follows your Omarchy theme.
 
-![Omashot editor](docs/screenshots/editor.png)
+![Omacapture editor](docs/screenshots/editor.png)
 
 ## Highlights
 
@@ -17,7 +17,7 @@ Screenshot capture and annotation for [Omarchy](https://omarchy.org). A bar widg
 </tr>
 <tr>
 <td><img src="docs/screenshots/bar-panel.png" alt="Bar panel" width="420"></td>
-<td><b>Bar widget.</b> Left click captures, middle click captures and annotates, right click opens this panel with every mode. Fully keyboard navigable, and reachable from scripts through <code>omarchy-shell omashot &lt;mode&gt;</code>.</td>
+<td><b>Bar widget.</b> Left click captures, middle click captures and annotates, right click opens this panel with every mode. Fully keyboard navigable, and reachable from scripts through <code>omarchy-shell omacapture &lt;mode&gt;</code>.</td>
 </tr>
 <tr>
 <td><img src="docs/screenshots/preferences.png" alt="Preferences"></td>
@@ -39,43 +39,43 @@ The plugin is QML that runs inside `omarchy-shell`; the capture and editor logic
 
 ```sh
 # 1. Shell plugin (bar widget + service)
-omarchy plugin add https://github.com/diyahir/omashot.git --enable
+omarchy plugin add https://github.com/diyahir/omacapture.git --enable
 
 # 2. Native binary. Omarchy already ships every runtime dependency
 #    (gtk4, libadwaita, gtk4-layer-shell, grim, wl-clipboard, tesseract);
 #    only a Rust toolchain is needed.
 omarchy install dev-env rust        # skip if you already have cargo
-cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omashot
-omarchy-shell omashot recheck
+cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omacapture
+omarchy-shell omacapture recheck
 ```
 
-`cargo install` puts `omashot` in `~/.cargo/bin`; the plugin looks there (and in `~/.local/bin`) itself, so it works even though the shell's own `PATH` does not include it. The widget appears in the bar's right section; move it with `omarchy bar move io.github.diyaclanker.omashot --section center`.
+`cargo install` puts `omacapture` in `~/.cargo/bin`; the plugin looks there (and in `~/.local/bin`) itself, so it works even though the shell's own `PATH` does not include it. The widget appears in the bar's right section; move it with `omarchy bar move io.github.diyaclanker.omacapture --section center`.
 
 ## Use
 
 | Where | What |
 | --- | --- |
 | Bar icon | Left click: capture (mode from the widget's `clickMode` setting). Middle click: capture and annotate. Right click: panel |
-| `omarchy-shell omashot area` | Through the shell service; also `window`, `full`, `annotate`, `ocr`, `history`, `settings`, `edit <path>`, `status` |
-| `omashot area` | The binary directly; same verbs plus `annotate FILE`, `qa copy\|edit\|open\|delete\|dismiss` for the newest card, `daemon`, `mcp`, and `--wait` for a JSON result |
-| `omashot FILE` | Opens a file in the editor, so `OMARCHY_SCREENSHOT_EDITOR=omashot` routes Omarchy's own screenshot notification into Omashot |
+| `omarchy-shell omacapture area` | Through the shell service; also `window`, `full`, `annotate`, `ocr`, `history`, `settings`, `edit <path>`, `status` |
+| `omacapture area` | The binary directly; same verbs plus `annotate FILE`, `qa copy\|edit\|open\|delete\|dismiss` for the newest card, `daemon`, `mcp`, and `--wait` for a JSON result |
+| `omacapture FILE` | Opens a file in the editor, so `OMARCHY_SCREENSHOT_EDITOR=omacapture` routes Omarchy's own screenshot notification into Omacapture |
 
 ### Keybindings
 
 Omarchy owns global shortcuts, and the plugin never edits your configuration on its own. Install bindings when you want them, from Preferences → Shortcuts or the CLI:
 
 ```sh
-omashot keybinds status            # which preset keys are free
-omashot keybinds install super-i   # Super+I area, Super+Shift+I annotate (press A in the overlay for windows)
-omashot keybinds install print     # take over Print (unbinds Omarchy's screenshot key), Shift/Ctrl/Super+Ctrl variants
-omashot keybinds remove            # take the block out again
+omacapture keybinds status            # which preset keys are free
+omacapture keybinds install super-i   # Super+I area, Super+Shift+I annotate (press A in the overlay for windows)
+omacapture keybinds install print     # take over Print (unbinds Omarchy's screenshot key), Shift/Ctrl/Super+Ctrl variants
+omacapture keybinds remove            # take the block out again
 ```
 
 This appends a clearly marked block to `~/.config/hypr/bindings.lua` (after backing it up), refuses if a key is already bound unless you pass `--force`, and reloads Hyprland. Or paste it yourself:
 
 ```lua
-o.bind("SUPER + I", "Screenshot", "omarchy-shell omashot area")
-o.bind("SUPER + SHIFT + I", "Screenshot and annotate", "omarchy-shell omashot annotate")
+o.bind("SUPER + I", "Screenshot", "omarchy-shell omacapture area")
+o.bind("SUPER + SHIFT + I", "Screenshot and annotate", "omarchy-shell omacapture annotate")
 ```
 
 ### Omarchy menu
@@ -83,8 +83,8 @@ o.bind("SUPER + SHIFT + I", "Screenshot and annotate", "omarchy-shell omashot an
 Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` to list it under Capture:
 
 ```jsonc
-"trigger.capture.omashot": {"icon":"󰄀","label":"Omashot","action":"omarchy-shell omashot area"},
-"trigger.capture.omashot-annotate": {"icon":"󰏫","label":"Omashot annotate","action":"omarchy-shell omashot annotate"},
+"trigger.capture.omacapture": {"icon":"󰄀","label":"Omacapture","action":"omarchy-shell omacapture area"},
+"trigger.capture.omacapture-annotate": {"icon":"󰏫","label":"Omacapture annotate","action":"omarchy-shell omacapture annotate"},
 ```
 
 ### Editor keys
@@ -102,7 +102,7 @@ Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` to list it under Captur
 
 ## Configuration
 
-Everything lives in `~/.config/omashot/config.toml`. Edit it by hand, through Preferences (`omashot settings`), or with the MCP `set_config` tool; the running app picks up changes immediately. Missing keys fall back to defaults. The full file with defaults:
+Everything lives in `~/.config/omacapture/config.toml`. Edit it by hand, through Preferences (`omacapture settings`), or with the MCP `set_config` tool; the running app picks up changes immediately. Missing keys fall back to defaults. The full file with defaults:
 
 ```toml
 [general]
@@ -179,10 +179,10 @@ The widget setting `clickMode` lives in `~/.config/omarchy/shell.json` under the
 
 ## MCP server for agents
 
-`omashot mcp` speaks the Model Context Protocol over stdio and needs no display of its own. Register it in Claude Code (the repo ships a `.mcp.json`) or any MCP client:
+`omacapture mcp` speaks the Model Context Protocol over stdio and needs no display of its own. Register it in Claude Code (the repo ships a `.mcp.json`) or any MCP client:
 
 ```json
-{ "mcpServers": { "omashot": { "command": "omashot", "args": ["mcp"] } } }
+{ "mcpServers": { "omacapture": { "command": "omacapture", "args": ["mcp"] } } }
 ```
 
 <img src="docs/screenshots/mcp-annotate.png" alt="Result of the MCP annotate tool" width="760">
@@ -203,35 +203,35 @@ The image above was produced entirely by an agent: one `capture_window` call, th
 
 `annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed.
 
-**What an agent can and cannot do.** Tools that take an output path only write `.png`, `.jpg`, or `.webp`, only inside your save folder, the private capture cache, the source image's own folder, or directories you list under `[mcp] allowed_write_dirs`, and never replace an existing file unless `overwrite: true` is passed. `set_config` cannot change the save folder or the `[mcp]` section, so an agent cannot widen its own fence. Run `omashot mcp --read-only` to expose only capture, OCR, read, and list tools: captures then go to the private cache and nothing user-named is ever written. Scratch captures live in `~/.local/share/omashot/captures` with owner-only permissions and are swept with the history retention window. There is no network access anywhere.
+**What an agent can and cannot do.** Tools that take an output path only write `.png`, `.jpg`, or `.webp`, only inside your save folder, the private capture cache, the source image's own folder, or directories you list under `[mcp] allowed_write_dirs`, and never replace an existing file unless `overwrite: true` is passed. `set_config` cannot change the save folder or the `[mcp]` section, so an agent cannot widen its own fence. Run `omacapture mcp --read-only` to expose only capture, OCR, read, and list tools: captures then go to the private cache and nothing user-named is ever written. Scratch captures live in `~/.local/share/omacapture/captures` with owner-only permissions and are swept with the history retention window. There is no network access anywhere.
 
 ## Update
 
 ```sh
-omarchy plugin update io.github.diyaclanker.omashot
-cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omashot
+omarchy plugin update io.github.diyaclanker.omacapture
+cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omacapture
 omarchy restart shell        # services load at shell start; bar widgets hot-reload on their own
 ```
 
 ## Remove
 
 ```sh
-omarchy plugin remove io.github.diyaclanker.omashot
-cargo uninstall omashot
+omarchy plugin remove io.github.diyaclanker.omacapture
+cargo uninstall omacapture
 ```
 
-Captures, history (`~/.local/share/omashot`), and config (`~/.config/omashot`) are left in place.
+Captures, history (`~/.local/share/omacapture`), and config (`~/.config/omacapture`) are left in place. An install from the earlier name, Omashot, has its config and history moved over automatically on first start.
 
 ## Dependencies and license
 
-Runtime: `gtk4`, `libadwaita`, `gtk4-layer-shell`, `grim`, `wl-clipboard`, and `tesseract` with a language pack, all part of a stock Omarchy install; optional `canberra-gtk-play` for the shutter sound. The plugin runs unsandboxed inside `omarchy-shell` like every Omarchy plugin; it only launches the `omashot` binary and never edits your configuration on its own.
+Runtime: `gtk4`, `libadwaita`, `gtk4-layer-shell`, `grim`, `wl-clipboard`, and `tesseract` with a language pack, all part of a stock Omarchy install; optional `canberra-gtk-play` for the shutter sound. The plugin runs unsandboxed inside `omarchy-shell` like every Omarchy plugin; it only launches the `omacapture` binary and never edits your configuration on its own.
 
 BSD-3-Clause. See `LICENSE`.
 
 ## Development
 
 ```sh
-cargo build --release && install -Dm755 target/release/omashot ~/.local/bin/omashot
+cargo build --release && install -Dm755 target/release/omacapture ~/.local/bin/omacapture
 cargo test                                    # model, redaction, and editor gesture tests
 omarchy plugin validate .                     # manifest check
 omarchy-shell shell rescanPlugins             # hot-reload QML after edits

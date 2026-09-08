@@ -1,6 +1,6 @@
 # wlptr
 
-Tiny virtual-pointer driver (wlr-virtual-pointer) for driving Omashot in gesture tests on Hyprland without ydotool or root.
+Tiny virtual-pointer driver (wlr-virtual-pointer) for driving Omacapture in gesture tests on Hyprland without ydotool or root.
 
 ```sh
 cargo build --release --manifest-path tools/wlptr/Cargo.toml

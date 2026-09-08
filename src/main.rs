@@ -20,7 +20,7 @@ use clap::{Parser, Subcommand};
 
 /// Screenshot capture and annotation for Wayland / Hyprland.
 #[derive(Parser, Debug, Clone)]
-#[command(name = "omashot", version, about)]
+#[command(name = "omacapture", version, about)]
 pub struct Cli {
     /// Run as an independent instance, block until the capture finishes, and print a JSON result line.
     #[arg(long, global = true)]
@@ -69,11 +69,11 @@ pub enum Command {
     },
 }
 
-/// `omashot FILE` opens the editor, so the binary can serve as
+/// `omacapture FILE` opens the editor, so the binary can serve as
 /// `OMARCHY_SCREENSHOT_EDITOR` and as a drag-and-drop target.
 pub fn normalize_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Vec<std::ffi::OsString> {
     let mut v: Vec<std::ffi::OsString> = args.into_iter().collect();
-    // Never reinterpret a valid invocation: `omashot area` stays a capture even
+    // Never reinterpret a valid invocation: `omacapture area` stays a capture even
     // if a file named `area` happens to exist in the working directory.
     if Cli::try_parse_from(&v).is_ok() {
         return v;
@@ -90,7 +90,7 @@ pub fn normalize_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Vec
 fn main() -> glib::ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("omashot=info")),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("omacapture=info")),
         )
         .with_writer(std::io::stderr)
         .init();
