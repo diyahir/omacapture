@@ -114,10 +114,16 @@ notifications = true                      # shown when Quick Access is off
 remember_last_area = true
 delay_ms = 0
 
-[post_capture.fullscreen]                 # same keys for .area, .window, .annotate_export
+[post_capture.fullscreen]                 # same keys for .area and .window
 save = true
 copy = true
 quick_access = true
+annotate = false
+
+[post_capture.annotate_export]            # what a save from the editor does
+save = true
+copy = true
+quick_access = false                      # a save refreshes an existing card; true also adds one
 annotate = false
 
 [quick_access]

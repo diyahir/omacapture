@@ -95,7 +95,7 @@ impl Default for PostCapture {
             fullscreen: AfterCapture::default(),
             area: AfterCapture::default(),
             window: AfterCapture::default(),
-            annotate_export: AfterCapture { save: true, copy: true, quick_access: true, annotate: false },
+            annotate_export: AfterCapture { save: true, copy: true, quick_access: false, annotate: false },
         }
     }
 }
