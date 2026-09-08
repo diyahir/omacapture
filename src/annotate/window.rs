@@ -1414,9 +1414,14 @@ impl EditorWindow {
                 let _ = crate::clipboard::copy_png(&b);
             }
         }
-        if actions.quick_access && cfg.quick_access.enabled {
+        // A save is not a new capture: refresh the card that already shows this file
+        // (if any) and only add one when the user asked for it in Preferences.
+        if cfg.quick_access.enabled {
             let frame = Frame { image: img.clone(), scale: 1.0 };
-            self.gb.quick_access.borrow_mut().push(&self.gb, frame, path.clone(), true);
+            let mut qa = self.gb.quick_access.borrow_mut();
+            if !qa.refresh(&path, &frame) && actions.quick_access {
+                qa.push(&self.gb, frame, path.clone(), true);
+            }
         }
         if !quiet {
             self.toast(&format!("Saved {}", path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()));

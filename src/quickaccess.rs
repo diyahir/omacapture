@@ -10,10 +10,17 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+struct Card {
+    widget: gtk::Widget,
+    picture: gtk::Picture,
+    path: PathBuf,
+    width: i32,
+}
+
 pub struct QuickAccessPanel {
     window: Option<gtk::Window>,
     stack: Option<gtk::Box>,
-    cards: Vec<gtk::Widget>,
+    cards: Vec<Card>,
 }
 
 impl QuickAccessPanel {
@@ -57,18 +64,29 @@ impl QuickAccessPanel {
         let stack = self.ensure_window(gb);
         while self.cards.len() >= cfg.max_cards.max(1) {
             let old = self.cards.remove(0);
-            stack.remove(&old);
+            stack.remove(&old.widget);
         }
-        let card = build_card(gb, frame, path, is_saved, cfg.thumbnail_width.clamp(60, 2000), cfg.auto_dismiss_secs);
+        let width = cfg.thumbnail_width.clamp(60, 2000);
+        let (card, picture) = build_card(gb, frame, path.clone(), is_saved, width, cfg.auto_dismiss_secs);
         stack.append(&card);
-        self.cards.push(card.clone().upcast());
+        self.cards.push(Card { widget: card.clone().upcast(), picture, path, width });
         if let Some(w) = &self.window {
             w.present();
         }
     }
 
+    /// Update the thumbnail of the card showing `path`, if one is on screen.
+    /// Saving from the editor refreshes an existing card instead of adding another.
+    pub fn refresh(&mut self, path: &std::path::Path, frame: &Frame) -> bool {
+        let Some(card) = self.cards.iter().find(|c| c.path == path) else { return false };
+        let (thumb, w, h) = thumbnail(frame, card.width);
+        card.picture.set_paintable(Some(&thumb));
+        card.picture.set_size_request(w, h);
+        true
+    }
+
     pub fn remove(&mut self, card: &gtk::Widget) {
-        if let Some(pos) = self.cards.iter().position(|c| c == card) {
+        if let Some(pos) = self.cards.iter().position(|c| &c.widget == card) {
             self.cards.remove(pos);
         }
         if let Some(stack) = &self.stack {
@@ -85,16 +103,27 @@ impl QuickAccessPanel {
     }
 }
 
-fn build_card(gb: &Rc<Omashot>, frame: Frame, path: PathBuf, is_saved: bool, width: i32, auto_dismiss_secs: u32) -> gtk::Box {
+/// Downscale for the card so the layer surface sizes to the thumbnail, not the capture.
+fn thumbnail(frame: &Frame, width: i32) -> (gtk::gdk::Texture, i32, i32) {
+    let aspect = frame.height() as f64 / frame.width().max(1) as f64;
+    let thumb_h = ((width as f64 * aspect).round() as i32).clamp(60, 260);
+    let thumb = image::imageops::thumbnail(&frame.image, width as u32, thumb_h as u32);
+    (Frame { image: thumb, scale: 1.0 }.to_texture(), width, thumb_h)
+}
+
+fn build_card(
+    gb: &Rc<Omashot>,
+    frame: Frame,
+    path: PathBuf,
+    is_saved: bool,
+    width: i32,
+    auto_dismiss_secs: u32,
+) -> (gtk::Box, gtk::Picture) {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
     card.add_css_class("qa-card");
     card.set_overflow(gtk::Overflow::Hidden);
 
-    let aspect = frame.height() as f64 / frame.width().max(1) as f64;
-    let thumb_h = ((width as f64 * aspect).round() as i32).clamp(60, 260);
-    // Downscale for the card so the layer surface sizes to the thumbnail, not the capture.
-    let thumb = image::imageops::thumbnail(&frame.image, width as u32, thumb_h as u32);
-    let texture = Frame { image: thumb, scale: 1.0 }.to_texture();
+    let (texture, width, thumb_h) = thumbnail(&frame, width);
     let picture = gtk::Picture::for_paintable(&texture);
     picture.set_size_request(width, thumb_h);
     picture.set_content_fit(gtk::ContentFit::Cover);
@@ -262,5 +291,5 @@ fn build_card(gb: &Rc<Omashot>, frame: Frame, path: PathBuf, is_saved: bool, wid
         });
     }
     card.add_controller(keys);
-    card
+    (card, picture)
 }
