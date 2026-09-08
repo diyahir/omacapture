@@ -1,0 +1,33 @@
+[package]
+name = "grabbit"
+version = "0.1.0"
+edition = "2021"
+description = "Screenshot capture and annotation for Wayland / Hyprland"
+license = "BSD-3-Clause"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.11", features = ["v4_16"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
+gtk4-layer-shell = "0.8"
+glib = "0.22"
+gio = "0.22"
+cairo-rs = { version = "0.22", features = ["png"] }
+pango = "0.22"
+pangocairo = "0.22"
+gdk-pixbuf = "0.22"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+anyhow = "1"
+dirs = "6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

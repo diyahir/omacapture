@@ -1,0 +1,209 @@
+//! Application object, single-instance dispatch, and shared state.
+
+use crate::capture::{overlay, CaptureMode, Frame, Rect};
+use crate::config::{Config, ConfigHandle};
+use crate::history::History;
+use crate::quickaccess::QuickAccessPanel;
+use crate::{Cli, Command};
+use clap::Parser;
+use gtk::prelude::*;
+use gtk::{gio, glib};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+pub struct Grabbit {
+    pub app: adw::Application,
+    pub config: ConfigHandle,
+    pub history: RefCell<History>,
+    pub quick_access: RefCell<QuickAccessPanel>,
+    pub last_area: RefCell<Option<Rect>>,
+    _hold: RefCell<Option<gio::ApplicationHoldGuard>>,
+}
+
+thread_local! {
+    static INSTANCE: RefCell<Option<Rc<Grabbit>>> = const { RefCell::new(None) };
+}
+
+pub fn instance() -> Rc<Grabbit> {
+    INSTANCE.with(|i| i.borrow().clone().expect("app not started"))
+}
+
+pub fn run() -> glib::ExitCode {
+    crate::paths::ensure_dirs();
+    let app = adw::Application::new(Some(crate::paths::APP_ID), gio::ApplicationFlags::HANDLES_COMMAND_LINE);
+
+    app.connect_startup(|app| {
+        load_css();
+        let config = Config::load();
+        let history = History::open().expect("history db");
+        let _ = history.prune(config.history.retention_days, config.history.max_entries);
+        let gb = Rc::new(Grabbit {
+            app: app.clone(),
+            config: ConfigHandle::new(config),
+            history: RefCell::new(history),
+            quick_access: RefCell::new(QuickAccessPanel::new()),
+            last_area: RefCell::new(None),
+            _hold: RefCell::new(None),
+        });
+        INSTANCE.with(|i| *i.borrow_mut() = Some(gb));
+    });
+
+    app.connect_command_line(|app, cmdline| {
+        let args = cmdline.arguments();
+        let cli = match Cli::try_parse_from(&args) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("{e}");
+                return glib::ExitCode::from(2);
+            }
+        };
+        let gb = instance();
+        dispatch(&gb, cli.command.unwrap_or(Command::Area { annotate: false }));
+        let _ = app;
+        glib::ExitCode::SUCCESS
+    });
+
+    app.run()
+}
+
+fn load_css() {
+    let css = gtk::CssProvider::new();
+    css.load_from_string(include_str!("style.css"));
+    if let Some(display) = gtk::gdk::Display::default() {
+        gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+    }
+}
+
+pub fn dispatch(gb: &Rc<Grabbit>, cmd: Command) {
+    tracing::debug!("dispatch {cmd:?}");
+    match cmd {
+        Command::Daemon => {
+            *gb._hold.borrow_mut() = Some(gb.app.hold());
+            tracing::info!("daemon running");
+        }
+        Command::Full => capture_fullscreen(gb),
+        Command::Area { annotate } => capture_area(gb, annotate),
+        Command::Window => capture_window(gb),
+        Command::Ocr => capture_ocr(gb),
+        Command::Annotate { file } => crate::annotate::open_file(gb, &file),
+        Command::History => crate::history::browser::open(gb),
+        Command::Settings => crate::annotate::preferences::open(gb),
+    }
+}
+
+fn with_delay(gb: &Rc<Grabbit>, f: impl FnOnce() + 'static) {
+    let delay = gb.config.get().general.delay_ms;
+    if delay == 0 {
+        f();
+    } else {
+        let hold = gb.app.hold();
+        glib::timeout_add_local_once(std::time::Duration::from_millis(delay as u64), move || {
+            f();
+            drop(hold);
+        });
+    }
+}
+
+fn capture_fullscreen(gb: &Rc<Grabbit>) {
+    let gb = gb.clone();
+    with_delay(&gb.clone(), move || {
+        let cfg = gb.config.get();
+        let monitors = crate::capture::hypr::monitors().unwrap_or_default();
+        if monitors.is_empty() {
+            match crate::capture::grim::capture_region(Rect::new(0, 0, 0, 0), 1.0, cfg.general.include_cursor) {
+                Ok(frame) => {
+                    crate::postcapture::handle(&gb, frame, CaptureMode::Fullscreen);
+                }
+                Err(e) => tracing::error!("{e}"),
+            }
+            return;
+        }
+        // One file per monitor, like the original.
+        for m in monitors {
+            match crate::capture::grim::capture_output(&m.name, m.scale, cfg.general.include_cursor) {
+                Ok(frame) => {
+                    crate::postcapture::handle(&gb, frame, CaptureMode::Fullscreen);
+                }
+                Err(e) => tracing::error!("{e}"),
+            }
+        }
+    });
+}
+
+fn start_pick(gb: &Rc<Grabbit>, mode: overlay::PickMode, on_frame: impl FnOnce(&Rc<Grabbit>, Frame, Rect) + 'static) {
+    let cfg = gb.config.get();
+    let remembered = if cfg.general.remember_last_area { *gb.last_area.borrow() } else { None };
+    let hold = gb.app.hold();
+    let gb2 = gb.clone();
+    overlay::pick(&gb.app, mode, cfg.general.include_cursor, remembered, move |sel| {
+        if let Some(sel) = sel {
+            *gb2.last_area.borrow_mut() = Some(sel.rect);
+            on_frame(&gb2, sel.frame, sel.rect);
+        }
+        drop(hold);
+    });
+}
+
+fn capture_area(gb: &Rc<Grabbit>, inline_annotate: bool) {
+    let gb = gb.clone();
+    with_delay(&gb.clone(), move || {
+        start_pick(&gb, overlay::PickMode::Region, move |gb, frame, _| {
+            if inline_annotate {
+                crate::annotate::open(gb, frame, None);
+            } else {
+                crate::postcapture::handle(gb, frame, CaptureMode::Area);
+            }
+        });
+    });
+}
+
+fn capture_window(gb: &Rc<Grabbit>) {
+    let gb = gb.clone();
+    with_delay(&gb.clone(), move || {
+        start_pick(&gb, overlay::PickMode::Window, |gb, frame, _| {
+            crate::postcapture::handle(gb, frame, CaptureMode::Window);
+        });
+    });
+}
+
+fn capture_ocr(gb: &Rc<Grabbit>) {
+    let gb = gb.clone();
+    start_pick(&gb.clone(), overlay::PickMode::Region, move |gb, frame, _| {
+        let cfg = gb.config.get();
+        let app = gb.app.clone();
+        let png = match crate::export::encode_png(&frame.image) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!("{e}");
+                return;
+            }
+        };
+        let hold = RefCell::new(Some(app.hold()));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let langs = cfg.ocr.languages.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(crate::ocr::recognize(&png, &langs));
+        });
+        glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+            match rx.try_recv() {
+                Ok(Ok(text)) => {
+                    let preview: String = text.chars().take(160).collect();
+                    if cfg.ocr.copy_to_clipboard {
+                        let _ = crate::clipboard::copy_text(&text);
+                    }
+                    let title = if text.is_empty() { "No text found" } else { "Text copied to clipboard" };
+                    crate::notify::send(app.upcast_ref::<gtk::Application>(), "ocr", title, &preview, None);
+                    hold.borrow_mut().take();
+                    glib::ControlFlow::Break
+                }
+                Ok(Err(e)) => {
+                    crate::notify::send(app.upcast_ref::<gtk::Application>(), "ocr", "OCR failed", &e.to_string(), None);
+                    hold.borrow_mut().take();
+                    glib::ControlFlow::Break
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                Err(_) => glib::ControlFlow::Break,
+            }
+        });
+    });
+}

@@ -1,0 +1,18 @@
+.grabbit-overlay { background: transparent; }
+
+.grabbit-quickaccess { background: transparent; }
+.qa-card {
+  background: alpha(@window_bg_color, 0.96);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+  border: 1px solid alpha(@borders, 0.6);
+}
+.qa-thumb { border-radius: 12px 12px 0 0; }
+.qa-bar { padding: 4px; }
+.qa-bar button { padding: 4px 6px; font-size: 0.85em; }
+.qa-close { background: rgba(0,0,0,0.55); color: white; min-width: 22px; min-height: 22px; padding: 0; }
+.qa-close:hover { background: rgba(0,0,0,0.8); }
+
+.annotate-canvas { background: @view_bg_color; }
+.tool-button.active { background: alpha(@accent_bg_color, 0.35); }
+.history-thumb { border-radius: 6px; }
