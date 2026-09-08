@@ -18,7 +18,9 @@ Item {
   property bool checked: false
 
   function capture(mode) {
-    if (!root.installed) {
+    // Only report "missing" once the probe has actually run and failed;
+    // right after a plugin reload the probe may still be in flight.
+    if (root.checked && !root.installed) {
       Util.execDetached("omarchy-notification-send 'Omashot is not installed' 'Run: cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omashot'")
       return "missing"
     }
@@ -66,7 +68,7 @@ Item {
     function settings(): string { return root.capture("settings") }
 
     function edit(path: string): string {
-      if (!root.installed) return "missing"
+      if (root.checked && !root.installed) return "missing"
       Util.execDetached(Model.editCommand(path))
       return "ok"
     }
