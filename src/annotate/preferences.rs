@@ -291,6 +291,13 @@ pub fn open(gb: &Rc<Omashot>) {
         }));
         let gb = outer.clone();
         g_qa.add(&switch_row(
+            "Hover-free shortcuts",
+            Some("Register the global chords below with Hyprland while a card is showing"),
+            cfg.quick_access.global_shortcuts,
+            move |v| gb.config.update(|c| c.quick_access.global_shortcuts = v),
+        ));
+        let gb = outer.clone();
+        g_qa.add(&switch_row(
             "Keep editing after drag",
             Some("Leave the editor open after dragging into another app"),
             cfg.quick_access.keep_editing_after_drag,
@@ -298,6 +305,32 @@ pub fn open(gb: &Rc<Omashot>) {
         ));
     }
     qa.add(&g_qa);
+    let g_keys_qa = adw::PreferencesGroup::new();
+    g_keys_qa.set_title("Card shortcuts");
+    g_keys_qa.set_description(Some("Hover keys are single key names (c, Delete, Escape, F5) and work while the pointer is over a card. Global chords are Hyprland combinations (SUPER + E) that exist only while a card is showing. Leave a field empty to disable it."));
+    let sc = cfg.quick_access.shortcuts.clone();
+    macro_rules! key_row {
+        ($title:expr, $field:ident, $validate:path) => {{
+            let gb = outer.clone();
+            g_keys_qa.add(&entry_row($title, &sc.$field, move |v| {
+                if $validate(&v).is_ok() {
+                    gb.config.update(|c| c.quick_access.shortcuts.$field = v.trim().to_string())
+                } else {
+                    tracing::warn!("ignoring invalid shortcut {v:?}");
+                }
+            }));
+        }};
+    }
+    key_row!("Hover: copy and dismiss", hover_copy, crate::config::validate_hover_key);
+    key_row!("Hover: edit", hover_edit, crate::config::validate_hover_key);
+    key_row!("Hover: open", hover_open, crate::config::validate_hover_key);
+    key_row!("Hover: delete", hover_delete, crate::config::validate_hover_key);
+    key_row!("Hover: dismiss", hover_dismiss, crate::config::validate_hover_key);
+    key_row!("Global: edit", global_edit, crate::config::validate_chord);
+    key_row!("Global: copy and dismiss", global_copy, crate::config::validate_chord);
+    key_row!("Global: delete", global_delete, crate::config::validate_chord);
+    key_row!("Global: open", global_open, crate::config::validate_chord);
+    qa.add(&g_keys_qa);
     add_page(&qa);
 
     // ----- Annotate -----

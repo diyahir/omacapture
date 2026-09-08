@@ -57,6 +57,11 @@ pub enum Command {
         #[arg(long)]
         read_only: bool,
     },
+    /// Act on the newest Quick Access card (used by the hover-free shortcuts).
+    Qa {
+        #[arg(value_enum)]
+        action: quickaccess::QaAction,
+    },
     /// Install, remove, or inspect the optional Hyprland keybindings.
     Keybinds {
         #[command(subcommand)]
