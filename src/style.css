@@ -1,6 +1,6 @@
-.grabbit-overlay { background: transparent; }
+.omashot-overlay { background: transparent; }
 
-.grabbit-quickaccess { background: transparent; }
+.omashot-quickaccess { background: transparent; }
 .qa-card {
   background: alpha(@window_bg_color, 0.96);
   border-radius: 12px;

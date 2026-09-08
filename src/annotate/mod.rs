@@ -8,16 +8,16 @@ pub mod render;
 pub mod session;
 pub mod window;
 
-use crate::app::Grabbit;
+use crate::app::Omashot;
 use crate::capture::Frame;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-pub fn open(gb: &Rc<Grabbit>, frame: Frame, source: Option<PathBuf>) {
+pub fn open(gb: &Rc<Omashot>, frame: Frame, source: Option<PathBuf>) {
     window::EditorWindow::open(gb, frame, source);
 }
 
-pub fn open_file(gb: &Rc<Grabbit>, path: &Path) {
+pub fn open_file(gb: &Rc<Omashot>, path: &Path) {
     match image::open(path) {
         Ok(img) => open(gb, Frame { image: img.to_rgba8(), scale: 1.0 }, Some(path.to_path_buf())),
         Err(e) => tracing::error!("cannot open {}: {e}", path.display()),

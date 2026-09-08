@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.diyaclanker.omashot",
+  "name": "Omashot",
+  "version": "0.1.0",
+  "author": "diyaclanker",
+  "license": "BSD-3-Clause",
+  "description": "Screenshot capture and annotation editor for Omarchy: frozen-screen region picker, shapes, arrows, text, blur, OCR, Quick Access cards, history, and an MCP server for agents.",
+  "homepage": "https://github.com/diyaclanker/omashot",
+  "kinds": ["bar-widget", "service"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
+  },
+  "keepLoaded": true,
+  "barWidget": {
+    "displayName": "Omashot",
+    "description": "Screenshot button: click to capture a region, right-click for all capture modes",
+    "category": "Utilities",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": { "clickMode": "area", "showDaemon": true },
+    "schema": [
+      { "key": "clickMode", "type": "string", "label": "Left-click capture mode (area, window, full, annotate, ocr)" },
+      { "key": "showDaemon", "type": "boolean", "label": "Keep the omashot daemon resident for instant captures" }
+    ]
+  }
+}

@@ -65,7 +65,7 @@ pub fn save_to(img: &RgbaImage, path: &Path, quality: u8) -> Result<()> {
 /// Write a PNG into the temp dir so it can be dragged or shared by URI.
 pub fn write_temp_png(img: &RgbaImage) -> Result<PathBuf> {
     crate::paths::ensure_dirs();
-    let name = format!("grabbit-{}.png", chrono::Local::now().format("%Y%m%d-%H%M%S-%3f"));
+    let name = format!("omashot-{}.png", chrono::Local::now().format("%Y%m%d-%H%M%S-%3f"));
     let path = crate::paths::temp_dir().join(name);
     std::fs::write(&path, encode_png(img)?)?;
     Ok(path)

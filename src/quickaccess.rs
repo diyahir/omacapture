@@ -1,6 +1,6 @@
 //! Floating Quick Access panel shown after every capture.
 
-use crate::app::Grabbit;
+use crate::app::Omashot;
 use crate::capture::Frame;
 use crate::config::Corner;
 use gtk::prelude::*;
@@ -21,7 +21,7 @@ impl QuickAccessPanel {
         Self { window: None, stack: None, cards: Vec::new() }
     }
 
-    fn ensure_window(&mut self, gb: &Rc<Grabbit>) -> gtk::Box {
+    fn ensure_window(&mut self, gb: &Rc<Omashot>) -> gtk::Box {
         if let Some(s) = &self.stack {
             return s.clone();
         }
@@ -30,7 +30,7 @@ impl QuickAccessPanel {
         window.set_application(Some(&gb.app));
         window.init_layer_shell();
         window.set_layer(Layer::Overlay);
-        window.set_namespace(Some("grabbit-quickaccess"));
+        window.set_namespace(Some("omashot-quickaccess"));
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_exclusive_zone(0);
         let (v, h) = match cfg.corner {
@@ -43,7 +43,7 @@ impl QuickAccessPanel {
         window.set_anchor(h, true);
         window.set_margin(v, 16);
         window.set_margin(h, 16);
-        window.add_css_class("grabbit-quickaccess");
+        window.add_css_class("omashot-quickaccess");
         let stack = gtk::Box::new(gtk::Orientation::Vertical, 10);
         stack.set_valign(if matches!(v, Edge::Bottom) { gtk::Align::End } else { gtk::Align::Start });
         window.set_child(Some(&stack));
@@ -52,7 +52,7 @@ impl QuickAccessPanel {
         stack
     }
 
-    pub fn push(&mut self, gb: &Rc<Grabbit>, frame: Frame, path: PathBuf, is_saved: bool) {
+    pub fn push(&mut self, gb: &Rc<Omashot>, frame: Frame, path: PathBuf, is_saved: bool) {
         let cfg = gb.config.get().quick_access;
         let stack = self.ensure_window(gb);
         while self.cards.len() >= cfg.max_cards.max(1) {
@@ -86,7 +86,7 @@ impl QuickAccessPanel {
 }
 
 fn build_card(
-    gb: &Rc<Grabbit>,
+    gb: &Rc<Omashot>,
     frame: Frame,
     path: PathBuf,
     is_saved: bool,

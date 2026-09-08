@@ -11,7 +11,7 @@ use gtk::{gio, glib};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub struct Grabbit {
+pub struct Omashot {
     pub app: adw::Application,
     pub config: ConfigHandle,
     pub history: RefCell<History>,
@@ -23,10 +23,10 @@ pub struct Grabbit {
 }
 
 thread_local! {
-    static INSTANCE: RefCell<Option<Rc<Grabbit>>> = const { RefCell::new(None) };
+    static INSTANCE: RefCell<Option<Rc<Omashot>>> = const { RefCell::new(None) };
 }
 
-pub fn instance() -> Rc<Grabbit> {
+pub fn instance() -> Rc<Omashot> {
     INSTANCE.with(|i| i.borrow().clone().expect("app not started"))
 }
 
@@ -44,7 +44,7 @@ pub fn run() -> glib::ExitCode {
         let config = Config::load();
         let history = History::open().expect("history db");
         let _ = history.prune(config.history.retention_days, config.history.max_entries);
-        let gb = Rc::new(Grabbit {
+        let gb = Rc::new(Omashot {
             app: app.clone(),
             config: ConfigHandle::new(config),
             history: RefCell::new(history),
@@ -57,7 +57,7 @@ pub fn run() -> glib::ExitCode {
     });
 
     app.connect_command_line(|app, cmdline| {
-        let args = cmdline.arguments();
+        let args = crate::normalize_args(cmdline.arguments());
         let cli = match Cli::try_parse_from(&args) {
             Ok(c) => c,
             Err(e) => {
@@ -85,7 +85,7 @@ fn load_css() {
     }
 }
 
-pub fn dispatch(gb: &Rc<Grabbit>, cmd: Command) {
+pub fn dispatch(gb: &Rc<Omashot>, cmd: Command) {
     tracing::debug!("dispatch {cmd:?}");
     match cmd {
         Command::Daemon => {
@@ -104,7 +104,7 @@ pub fn dispatch(gb: &Rc<Grabbit>, cmd: Command) {
 }
 
 /// In `--wait` mode, report a finished capture on stdout and exit.
-pub fn report_wait_result(gb: &Rc<Grabbit>, path: Option<&std::path::Path>, width: u32, height: u32) {
+pub fn report_wait_result(gb: &Rc<Omashot>, path: Option<&std::path::Path>, width: u32, height: u32) {
     if !gb.wait_mode.get() {
         return;
     }
@@ -117,7 +117,7 @@ pub fn report_wait_result(gb: &Rc<Grabbit>, path: Option<&std::path::Path>, widt
     glib::idle_add_local_once(move || app.quit());
 }
 
-fn with_delay(gb: &Rc<Grabbit>, f: impl FnOnce() + 'static) {
+fn with_delay(gb: &Rc<Omashot>, f: impl FnOnce() + 'static) {
     let delay = gb.config.get().general.delay_ms;
     if delay == 0 {
         f();
@@ -130,7 +130,7 @@ fn with_delay(gb: &Rc<Grabbit>, f: impl FnOnce() + 'static) {
     }
 }
 
-fn capture_fullscreen(gb: &Rc<Grabbit>) {
+fn capture_fullscreen(gb: &Rc<Omashot>) {
     let gb = gb.clone();
     with_delay(&gb.clone(), move || {
         let cfg = gb.config.get();
@@ -156,7 +156,7 @@ fn capture_fullscreen(gb: &Rc<Grabbit>) {
     });
 }
 
-fn start_pick(gb: &Rc<Grabbit>, mode: overlay::PickMode, on_frame: impl FnOnce(&Rc<Grabbit>, Frame, Rect) + 'static) {
+fn start_pick(gb: &Rc<Omashot>, mode: overlay::PickMode, on_frame: impl FnOnce(&Rc<Omashot>, Frame, Rect) + 'static) {
     let cfg = gb.config.get();
     let remembered = if cfg.general.remember_last_area { *gb.last_area.borrow() } else { None };
     let hold = gb.app.hold();
@@ -173,7 +173,7 @@ fn start_pick(gb: &Rc<Grabbit>, mode: overlay::PickMode, on_frame: impl FnOnce(&
     });
 }
 
-fn capture_area(gb: &Rc<Grabbit>, inline_annotate: bool) {
+fn capture_area(gb: &Rc<Omashot>, inline_annotate: bool) {
     let gb = gb.clone();
     with_delay(&gb.clone(), move || {
         start_pick(&gb, overlay::PickMode::Region, move |gb, frame, _| {
@@ -186,7 +186,7 @@ fn capture_area(gb: &Rc<Grabbit>, inline_annotate: bool) {
     });
 }
 
-fn capture_window(gb: &Rc<Grabbit>) {
+fn capture_window(gb: &Rc<Omashot>) {
     let gb = gb.clone();
     with_delay(&gb.clone(), move || {
         start_pick(&gb, overlay::PickMode::Window, |gb, frame, _| {
@@ -195,7 +195,7 @@ fn capture_window(gb: &Rc<Grabbit>) {
     });
 }
 
-fn capture_ocr(gb: &Rc<Grabbit>) {
+fn capture_ocr(gb: &Rc<Omashot>) {
     let gb = gb.clone();
     start_pick(&gb.clone(), overlay::PickMode::Region, move |gb, frame, _| {
         let cfg = gb.config.get();

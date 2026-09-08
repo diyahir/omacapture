@@ -1,11 +1,11 @@
 //! History browser window.
 
-use crate::app::Grabbit;
+use crate::app::Omashot;
 use adw::prelude::*;
 use gtk::prelude::*;
 use std::rc::Rc;
 
-pub fn open(gb: &Rc<Grabbit>) {
+pub fn open(gb: &Rc<Omashot>) {
     let win = adw::ApplicationWindow::builder()
         .application(&gb.app)
         .title("Capture History")

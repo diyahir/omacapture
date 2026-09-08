@@ -1,6 +1,6 @@
 //! Preferences window backed by the TOML config.
 
-use crate::app::Grabbit;
+use crate::app::Omashot;
 use crate::config::{AfterCapture, Corner, ImageFormat};
 use adw::prelude::*;
 use gtk::{gio, glib};
@@ -46,7 +46,7 @@ fn combo_row(title: &str, items: &[&str], selected: u32, on_change: impl Fn(u32)
     row
 }
 
-fn matrix_group(gb: &Rc<Grabbit>, title: &str, get: fn(&crate::config::Config) -> AfterCapture, set: fn(&mut crate::config::Config, AfterCapture)) -> adw::PreferencesGroup {
+fn matrix_group(gb: &Rc<Omashot>, title: &str, get: fn(&crate::config::Config) -> AfterCapture, set: fn(&mut crate::config::Config, AfterCapture)) -> adw::PreferencesGroup {
     let group = adw::PreferencesGroup::new();
     group.set_title(title);
     let cur = get(&gb.config.get());
@@ -67,12 +67,12 @@ fn matrix_group(gb: &Rc<Grabbit>, title: &str, get: fn(&crate::config::Config) -
     group
 }
 
-pub fn open(gb: &Rc<Grabbit>) {
+pub fn open(gb: &Rc<Omashot>) {
     let outer = gb.clone();
     let cfg = gb.config.get();
     let win = adw::PreferencesWindow::new();
     win.set_application(Some(&gb.app));
-    win.set_title(Some("Grabbit Preferences"));
+    win.set_title(Some("Omashot Preferences"));
     win.set_default_size(720, 640);
     win.set_search_enabled(true);
 
@@ -254,7 +254,7 @@ pub fn open(gb: &Rc<Grabbit>) {
     let g_keys = adw::PreferencesGroup::new();
     g_keys.set_title("Hyprland bindings");
     g_keys.set_description(Some("Global shortcuts belong to the compositor. Add these lines to ~/.config/hypr/bindings.conf (or your keybinds file) and reload Hyprland."));
-    let exe = std::env::current_exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| "grabbit".into());
+    let exe = std::env::current_exe().map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|_| "omashot".into());
     let snippet = format!(
         "bind = , PRINT, exec, {exe} area\nbind = SHIFT, PRINT, exec, {exe} window\nbind = CTRL, PRINT, exec, {exe} full\nbind = ALT, PRINT, exec, {exe} area --annotate\nbind = SUPER SHIFT, T, exec, {exe} ocr\nbind = SUPER SHIFT, H, exec, {exe} history\nexec-once = {exe} daemon\n"
     );

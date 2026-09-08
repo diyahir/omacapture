@@ -1,4 +1,4 @@
-//! MCP (Model Context Protocol) server over stdio so agents can drive Grabbit.
+//! MCP (Model Context Protocol) server over stdio so agents can drive Omashot.
 //!
 //! Runs without GTK: captures go through grim, OCR through tesseract, and
 //! rendering through the cairo-based annotation renderer. Interactive
@@ -57,8 +57,8 @@ fn handle(method: &str, params: &Value) -> Result<Value> {
         "initialize" => Ok(json!({
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "grabbit", "version": env!("CARGO_PKG_VERSION")},
-            "instructions": "Grabbit captures screenshots on a Wayland/Hyprland desktop and annotates images. \
+            "serverInfo": {"name": "omashot", "version": env!("CARGO_PKG_VERSION")},
+            "instructions": "Omashot captures screenshots on a Wayland/Hyprland desktop and annotates images. \
                 Use list_windows/list_monitors to discover targets, capture_* to grab pixels (images are returned \
                 downscaled unless max_width is raised; the full-resolution file path is always returned), ocr to read \
                 text, annotate to draw markup onto an image file, and open_editor to hand an image to the human."
@@ -155,12 +155,12 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "history_list",
-            "description": "List recent captures from Grabbit's history.",
+            "description": "List recent captures from Omashot's history.",
             "inputSchema": {"type":"object","properties":{"limit":{"type":"integer","default":20},"search":{"type":"string"}}}
         }),
         json!({
             "name": "open_editor",
-            "description": "Open an image in Grabbit's annotation editor for the human. Returns immediately.",
+            "description": "Open an image in Omashot's annotation editor for the human. Returns immediately.",
             "inputSchema": {"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}
         }),
         json!({

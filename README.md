@@ -1,4 +1,4 @@
-# Grabbit
+# Omashot
 
 Screenshot capture and annotation for Wayland compositors, built for Hyprland. Written in Rust with GTK4 and libadwaita.
 
@@ -10,13 +10,13 @@ Screenshot capture and annotation for Wayland compositors, built for Hyprland. W
 - **History**: searchable browser of recent captures with retention policies.
 - **OCR**: region-to-clipboard text capture with tesseract.
 - **MCP server**: lets AI agents capture, inspect, OCR, and annotate through the Model Context Protocol.
-- **Config**: TOML at `~/.config/grabbit/config.toml`, editable through the Preferences window or by hand.
+- **Config**: TOML at `~/.config/omashot/config.toml`, editable through the Preferences window or by hand.
 
 ## Install
 
 ```sh
 cargo build --release
-install -Dm755 target/release/grabbit ~/.local/bin/grabbit
+install -Dm755 target/release/omashot ~/.local/bin/omashot
 ```
 
 Runtime dependencies: `gtk4`, `libadwaita`, `gtk4-layer-shell`, `grim`, `wl-clipboard`; optional `tesseract` plus a language pack for OCR and highlighter text snapping, `canberra-gtk-play` for the shutter sound.
@@ -24,27 +24,27 @@ Runtime dependencies: `gtk4`, `libadwaita`, `gtk4-layer-shell`, `grim`, `wl-clip
 ## Usage
 
 ```sh
-grabbit area              # select a region
-grabbit area --annotate   # select a region and annotate before saving
-grabbit window            # pick a window
-grabbit full              # every monitor
-grabbit ocr               # region -> text on the clipboard
-grabbit annotate FILE     # open an image in the editor
-grabbit history           # capture history
-grabbit settings          # preferences
-grabbit daemon            # keep a resident instance so hotkeys respond instantly
-grabbit --wait area       # independent instance; prints a JSON result line when done
+omashot area              # select a region
+omashot area --annotate   # select a region and annotate before saving
+omashot window            # pick a window
+omashot full              # every monitor
+omashot ocr               # region -> text on the clipboard
+omashot annotate FILE     # open an image in the editor
+omashot history           # capture history
+omashot settings          # preferences
+omashot daemon            # keep a resident instance so hotkeys respond instantly
+omashot --wait area       # independent instance; prints a JSON result line when done
 ```
 
 Hyprland owns global shortcuts. Add to `~/.config/hypr/bindings.conf` (Preferences → Shortcuts has a copy button):
 
 ```
-bind = , PRINT, exec, grabbit area
-bind = SHIFT, PRINT, exec, grabbit window
-bind = CTRL, PRINT, exec, grabbit full
-bind = ALT, PRINT, exec, grabbit area --annotate
-bind = SUPER SHIFT, T, exec, grabbit ocr
-exec-once = grabbit daemon
+bind = , PRINT, exec, omashot area
+bind = SHIFT, PRINT, exec, omashot window
+bind = CTRL, PRINT, exec, omashot full
+bind = ALT, PRINT, exec, omashot area --annotate
+bind = SUPER SHIFT, T, exec, omashot ocr
+exec-once = omashot daemon
 ```
 
 ### Editor keys
@@ -62,10 +62,10 @@ exec-once = grabbit daemon
 
 ## MCP server for agents
 
-`grabbit mcp` speaks the Model Context Protocol over stdio and needs no display of its own. Register it in Claude Code (the repo ships a `.mcp.json`) or any MCP client:
+`omashot mcp` speaks the Model Context Protocol over stdio and needs no display of its own. Register it in Claude Code (the repo ships a `.mcp.json`) or any MCP client:
 
 ```json
-{ "mcpServers": { "grabbit": { "command": "grabbit", "args": ["mcp"] } } }
+{ "mcpServers": { "omashot": { "command": "omashot", "args": ["mcp"] } } }
 ```
 
 Tools:

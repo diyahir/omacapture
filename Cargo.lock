@@ -558,34 +558,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "grabbit"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64",
- "cairo-rs",
- "chrono",
- "clap",
- "dirs",
- "gdk-pixbuf",
- "gio",
- "glib",
- "gtk4",
- "gtk4-layer-shell",
- "image",
- "libadwaita",
- "pango",
- "pangocairo",
- "regex",
- "rusqlite",
- "serde",
- "serde_json",
- "toml 0.9.12+spec-1.1.0",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "graphene-rs"
 version = "0.22.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -974,6 +946,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "omashot"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "cairo-rs",
+ "chrono",
+ "clap",
+ "dirs",
+ "gdk-pixbuf",
+ "gio",
+ "glib",
+ "gtk4",
+ "gtk4-layer-shell",
+ "image",
+ "libadwaita",
+ "pango",
+ "pangocairo",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "toml 0.9.12+spec-1.1.0",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

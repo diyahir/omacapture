@@ -1,6 +1,6 @@
-# Grabbit — Behavioral Specification
+# Omashot — Behavioral Specification
 
-Grabbit is a Linux (Rust + GTK4, Wayland/Hyprland) screenshot and annotation tool. This document
+Omashot is a Linux (Rust + GTK4, Wayland/Hyprland) screenshot and annotation tool. This document
 describes *what the user experiences*, not how it is built. It is derived from studying the
 behavior of a macOS screenshot app and re-expressed independently for a Linux desktop. Scope is
 limited to still-image capture, the post-capture flow, the annotation editor, and capture
@@ -9,20 +9,20 @@ updaters, scrolling capture.
 
 Platform mapping used throughout (macOS concept -> Linux equivalent):
 
-| macOS | Grabbit on Linux |
+| macOS | Omashot on Linux |
 | --- | --- |
 | ScreenCaptureKit / CGDisplay capture | `wlr-screencopy` / `ext-image-copy-capture` via `grim`-style client, or xdg-desktop-portal Screenshot as fallback |
 | Window enumeration (CGWindowList) | Hyprland IPC (`hyprctl clients -j`) / `wlr-foreign-toplevel`; portal has no per-window pick, so window capture crops the window rect from a display copy |
 | Vision OCR / barcode | `tesseract` (leptonica) + `zbar` for QR |
 | Vision subject mask (object cutout) | later; `rembg`/ONNX if ever added |
 | Keychain | `libsecret` (only needed if a remote OCR key is ever stored) |
-| UserDefaults | TOML config (`~/.config/grabbit/config.toml`) + a small state file |
+| UserDefaults | TOML config (`~/.config/omashot/config.toml`) + a small state file |
 | NSPasteboard | `wl-clipboard` semantics via GTK4 `Gdk.Clipboard` (image/png + text/uri-list) |
-| Carbon global hotkeys | Hyprland `bind` lines invoking `grabbit --capture area` (CLI/D-Bus), plus GlobalShortcuts portal where available |
-| snapzy:// URL scheme | `grabbit` CLI subcommands and a D-Bus service; same verbs |
+| Carbon global hotkeys | Hyprland `bind` lines invoking `omashot --capture area` (CLI/D-Bus), plus GlobalShortcuts portal where available |
+| snapzy:// URL scheme | `omashot` CLI subcommands and a D-Bus service; same verbs |
 | NSPanel floating, all-Spaces | `gtk4-layer-shell` overlay surfaces (layer `overlay`, exclusive keyboard while selecting) |
 | Native notifications | `org.freedesktop.Notifications` (libnotify) |
-| Application Support | `$XDG_DATA_HOME/grabbit/` (captures cache, sessions, thumbnails, sqlite) |
+| Application Support | `$XDG_DATA_HOME/omashot/` (captures cache, sessions, thumbnails, sqlite) |
 
 ---
 
@@ -39,7 +39,7 @@ Platform mapping used throughout (macOS concept -> Linux equivalent):
 | Object cutout | Transparent PNG of the subject | **Later.** Needs a segmentation model; listed for completeness. |
 
 Every mode is launchable from: tray/status menu, a global shortcut, and the CLI/D-Bus verb.
-Grabbit's own windows are hidden for the duration of a capture unless "include own windows" is on.
+Omashot's own windows are hidden for the duration of a capture unless "include own windows" is on.
 
 ### 1.1 Fullscreen
 
@@ -73,16 +73,16 @@ single drag can cross monitor boundaries.
 - **Confirm / cancel.**
   - Mouse-up ends the drag and captures immediately.
   - `Esc` or right-click cancels; nothing is written.
-  - `Enter` before dragging = "repeat last area" (see below). Grabbit also treats `Enter`/`Space`
+  - `Enter` before dragging = "repeat last area" (see below). Omashot also treats `Enter`/`Space`
     after a drag-in-progress-with-handles as confirm.
 - **Space-drag move.** Holding `Space` mid-drag moves the rectangle instead of resizing it (this is
-  the behavior in the inline-annotate overlay; Grabbit applies it to plain area capture too).
-- **Constraint modifiers (Grabbit addition — the reference app has none in the capture overlay).**
+  the behavior in the inline-annotate overlay; Omashot applies it to plain area capture too).
+- **Constraint modifiers (Omashot addition — the reference app has none in the capture overlay).**
   `Shift` locks 1:1; `Ctrl` draws from center; arrow keys nudge the pending rectangle by 1 px
   (`Shift`+arrow: 10 px) before confirm with `Enter`.
 - **Window-pick mode (`A`).** Hovering highlights the topmost window under the pointer with a cutout
   matching the window's frame; click captures that window exactly (decorations and shadow included
-  where the compositor supplies them). Grabbit's own windows are never candidates. Press `A` again
+  where the compositor supplies them). Omashot's own windows are never candidates. Press `A` again
   to return to manual region.
 - **Remember last area.** Every completed manual area selection is stored (global logical coords).
   A separate "repeat area" shortcut re-captures that rectangle instantly without showing the
@@ -142,7 +142,7 @@ tiny or the crop would save <8%). Always exports PNG regardless of the configure
 
 ### 2.1 Action matrix
 
-Each after-capture action is an independent boolean, stored per capture kind. Grabbit has one kind
+Each after-capture action is an independent boolean, stored per capture kind. Omashot has one kind
 (screenshot); the schema keeps the nesting so other kinds can be added later.
 
 | Action | Default | Effect |
@@ -167,7 +167,7 @@ After an edit is saved from the editor, the clipboard copy is re-run if `copy_fi
 ### 2.2 Destinations
 
 - **Export folder**: default `~/Pictures/Screenshots` (macOS reference uses Desktop; Pictures fits XDG).
-- **Cache folder** (when `save=off`): `$XDG_DATA_HOME/grabbit/captures/`. Deliberately not `/tmp`
+- **Cache folder** (when `save=off`): `$XDG_DATA_HOME/omashot/captures/`. Deliberately not `/tmp`
   so drag-and-drop and paste never race a tmp cleaner. Saving later (Quick Access "Save") moves the
   file into the export folder preserving any template subfolders and moves its annotation session
   with it.
@@ -176,7 +176,7 @@ After an edit is saved from the editor, the clipboard copy is re-run if `copy_fi
 
 ### 2.3 File naming
 
-Template string with tokens, default `Grabbit_{datetime}_{ms}`:
+Template string with tokens, default `Omashot_{datetime}_{ms}`:
 
 `{datetime} {date} {time} {timestamp} {year} {yearShort} {month} {monthName} {monthShort} {day}
 {ms} {type} {appName}` (snake_case aliases accepted: `{year_short} {month_name} {month_short}
@@ -233,7 +233,7 @@ A small floating stack of cards that appears after each capture.
   | delete | top left | Delete file (trash if saved), history record, and annotation session. Confirm. |
   | edit | bottom left | Open in the annotation editor; pauses countdown. |
   | pin to screen | unassigned | Opens an always-on-top pin window. |
-  | upload | — | Omitted in Grabbit. |
+  | upload | — | Omitted in Omashot. |
 
 - **Hover shortcuts**: while a card is hovered, `Ctrl+C` copy, `Ctrl+S` save/open, `Ctrl+E` edit,
   `Ctrl+P` pin, `Ctrl+Backspace` delete, `Ctrl+W` dismiss. Only exact bindings are consumed;
@@ -340,7 +340,7 @@ Hold `Shift` while drawing rectangle/filled/oval to lock a square; line and stra
 - **Counter**: numbered circle, auto-increments per placement; diameter `12 + 4n` from the size
   control. Renumbering after deletion is not automatic.
 - **Watermark**: text; styles single / diagonal (rotated -24) / tiled (repeated, rotated -24);
-  color, opacity, size, rotation. An image watermark is a Grabbit extension (drop an image onto the
+  color, opacity, size, rotation. An image watermark is a Omashot extension (drop an image onto the
   watermark tool).
 - **Pencil**: freehand path; cannot be resized, only moved.
 - **Crop**: handles can shrink *and* expand the canvas (expanding adds blank annotatable area).
@@ -429,7 +429,7 @@ reporting through the same notification as OCR capture. Disabled in combine/mock
 
 ### 4.13 Combine images
 
-Entry from the tray menu or `grabbit combine a.png b.png` (2+ files; fewer opens a picker). Modes:
+Entry from the tray menu or `omashot combine a.png b.png` (2+ files; fewer opens a picker). Modes:
 auto-stitch (direction smart / horizontal / vertical) or free canvas with edge snapping. The
 combine layout is persisted inside the session manifest. "Combine save-as-edit" (default on) saves
 the result as an edit of the first image rather than a new file.
@@ -448,7 +448,7 @@ When the editor is opened empty and the clipboard holds an image: `ask` (default
 
 ## 5. Capture history
 
-- **Storage**: SQLite at `$XDG_DATA_HOME/grabbit/grabbit.db`. Each record: id, file path, kind
+- **Storage**: SQLite at `$XDG_DATA_HOME/omashot/omashot.db`. Each record: id, file path, kind
   (screenshot), created-at, pixel width/height, file size, app id, thumbnail path, flags
   (saved vs cache, pinned). Files are *referenced*, not copied. Thumbnails: JPEG, max side 208 px,
   in `thumbnails/`; in-memory LRU ~160 items.
@@ -475,7 +475,7 @@ When the editor is opened empty and the clipboard holds an image: `ask` (default
 
 ## 6. Configuration file
 
-Path: `~/.config/grabbit/config.toml` (respect `$XDG_CONFIG_HOME`). Grabbit reads it at launch and
+Path: `~/.config/omashot/config.toml` (respect `$XDG_CONFIG_HOME`). Omashot reads it at launch and
 watches it with inotify; the app also writes back debounced when preferences change in the UI. If
 the file was edited externally since the last write, the UI asks before overwriting. Unknown keys
 are ignored; known keys are type/range validated; an invalid file applies nothing and reports the
@@ -485,7 +485,7 @@ Keys mirror the reference layout in spirit. Defaults shown.
 
 ```toml
 schema_version = 1
-grabbit_min_version = "0.1.0"
+omashot_min_version = "0.1.0"
 
 [general]
 language = "system"              # "system" | BCP-47 tag
@@ -511,12 +511,12 @@ hidden_items = []
 hide_desktop_icons = false
 
 [capture.naming]
-screenshot_template = "Grabbit_{datetime}_{ms}"
+screenshot_template = "Omashot_{datetime}_{ms}"
 
 [capture.screenshot]
 format = "png"                   # "png" | "jpg" | "webp"
-jpeg_quality = 90                # Grabbit addition
-webp_quality = 80                # Grabbit addition
+jpeg_quality = 90                # Omashot addition
+webp_quality = 80                # Omashot addition
 include_own_windows = false
 show_cursor = false
 freeze_area = false
@@ -524,14 +524,14 @@ show_selection_area_overlay = true
 reverse_magnifier_zoom_direction = false
 show_magnifier_by_default = false
 show_magnifier_color_panel = true
-remember_last_area = true        # Grabbit addition (reference always remembers)
+remember_last_area = true        # Omashot addition (reference always remembers)
 
 [capture.ocr]
 success_notification = true
 link_detection = true
 selected_model = "builtin"       # "builtin" | "custom:<uuid>"
 custom_models = "[]"             # JSON array of {id,name,base_url,model,prompt}; no keys
-languages = ["eng"]              # Grabbit addition: tesseract packs
+languages = ["eng"]              # Omashot addition: tesseract packs
 
 [capture.object_cutout]
 auto_crop = true
@@ -639,9 +639,9 @@ cross-namespace duplicates between global, overlay, annotate-action, and annotat
 rejected; a card-action binding equal to a global shortcut is accepted with a warning. Named keys:
 `return`, `delete`, `esc`, `tab`, `space`, `up/down/left/right`, `f1`..`f12`.
 
-Since Hyprland owns global keybinds, Grabbit also emits a ready-to-include snippet
-(`~/.config/grabbit/hyprland.conf`) generated from `[shortcuts.global.*]`, e.g.
-`bind = SUPER SHIFT, 3, exec, grabbit capture fullscreen`.
+Since Hyprland owns global keybinds, Omashot also emits a ready-to-include snippet
+(`~/.config/omashot/hyprland.conf`) generated from `[shortcuts.global.*]`, e.g.
+`bind = SUPER SHIFT, 3, exec, omashot capture fullscreen`.
 
 ---
 
@@ -649,7 +649,7 @@ Since Hyprland owns global keybinds, Grabbit also emits a ready-to-include snipp
 
 ### 7.1 Global (proposed Linux defaults)
 
-| Kind | Action | macOS reference | Grabbit default |
+| Kind | Action | macOS reference | Omashot default |
 | --- | --- | --- | --- |
 | `fullscreen` | Capture fullscreen | Cmd+Shift+3 | `Super+Shift+3` |
 | `area` | Capture area | Cmd+Shift+4 | `Super+Shift+4` |
@@ -678,8 +678,8 @@ common configs).
 | `Esc` / right-click | Cancel |
 | `Enter` | Repeat last area (no drag yet) / confirm pending rect |
 | `Space` (hold) | Move rectangle while dragging |
-| `Shift` (hold) | Lock 1:1 (Grabbit addition) |
-| Arrows / `Shift`+arrows | Nudge pending rect 1 / 10 px (Grabbit addition) |
+| `Shift` (hold) | Lock 1:1 (Omashot addition) |
+| Arrows / `Shift`+arrows | Nudge pending rect 1 / 10 px (Omashot addition) |
 | Scroll | Magnifier zoom |
 
 Inline annotate adds: `Enter`/`Ctrl+S` finish, `Ctrl+C` copy render, tool keys `V R F O A L T H B S
@@ -720,9 +720,9 @@ N W P`.
 
 ### 7.6 CLI / D-Bus verbs (replaces the URL scheme)
 
-`grabbit capture {fullscreen|area|repeat-area|window|active-window|area-annotate|ocr|object-cutout}`,
-`grabbit open {annotate|history|combine <files...>}`, `grabbit show shortcuts`,
-`grabbit settings [--page general|capture|annotate|quick-access|history|shortcuts|advanced|about]`.
+`omashot capture {fullscreen|area|repeat-area|window|active-window|area-annotate|ocr|object-cutout}`,
+`omashot open {annotate|history|combine <files...>}`, `omashot show shortcuts`,
+`omashot settings [--page general|capture|annotate|quick-access|history|shortcuts|advanced|about]`.
 Disabled when `general.url_scheme_enabled = false`.
 
 ---
@@ -737,7 +737,7 @@ Disabled when `general.url_scheme_enabled = false`.
    with a "test" action rather than OS permission toggles.
 3. Global shortcuts: show the proposed Hyprland bind snippet, offer to write it to
    `~/.config/hypr/` include or copy to clipboard; detect if binds already exist.
-4. Config file: explain `~/.config/grabbit/config.toml`, create it with defaults.
+4. Config file: explain `~/.config/omashot/config.toml`, create it with defaults.
 5. Done; "Restart onboarding" remains available from General.
 
 ### 8.2 Preferences pages

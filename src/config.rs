@@ -1,4 +1,4 @@
-//! User configuration, persisted at `~/.config/grabbit/config.toml`.
+//! User configuration, persisted at `~/.config/omashot/config.toml`.
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -70,9 +70,14 @@ pub struct General {
 impl Default for General {
     fn default() -> Self {
         Self {
-            save_folder: dirs::picture_dir()
-                .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Pictures"))
-                .join("Screenshots"),
+            // Follow Omarchy's own screenshot tooling when it is configured.
+            save_folder: std::env::var_os("OMARCHY_SCREENSHOT_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    dirs::picture_dir()
+                        .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Pictures"))
+                        .join("Screenshots")
+                }),
             filename_pattern: "Screenshot %Y-%m-%d at %H.%M.%S".into(),
             format: ImageFormat::Png,
             quality: 90,
@@ -206,7 +211,7 @@ pub struct Ocr {
 
 impl Default for Ocr {
     fn default() -> Self {
-        Self { languages: "eng".into(), copy_to_clipboard: true }
+        Self { languages: std::env::var("OMARCHY_OCR_LANGS").unwrap_or_else(|_| "eng".into()), copy_to_clipboard: true }
     }
 }
 

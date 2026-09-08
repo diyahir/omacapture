@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "grabbit": {
-      "command": "grabbit",
+    "omashot": {
+      "command": "omashot",
       "args": ["mcp"]
     }
   }

@@ -4,7 +4,7 @@ use super::canvas::{Canvas, Tool, ToolOptions};
 use super::icons::tool_icon;
 use super::model::*;
 use super::{redact, session};
-use crate::app::Grabbit;
+use crate::app::Omashot;
 use crate::capture::Frame;
 use adw::prelude::*;
 use gtk::prelude::*;
@@ -16,7 +16,7 @@ use std::rc::Rc;
 pub struct EditorWindow {
     pub win: adw::ApplicationWindow,
     pub canvas: Canvas,
-    gb: Rc<Grabbit>,
+    gb: Rc<Omashot>,
     source: RefCell<Option<PathBuf>>,
     props: Props,
     sidebar: Sidebar,
@@ -113,7 +113,7 @@ const CANVAS_ASPECTS: [(&str, Option<(f64, f64)>); 5] =
     [("Auto", None), ("1:1", Some((1.0, 1.0))), ("4:3", Some((4.0, 3.0))), ("3:2", Some((3.0, 2.0))), ("16:9", Some((16.0, 9.0)))];
 
 impl EditorWindow {
-    pub fn open(gb: &Rc<Grabbit>, frame: Frame, source: Option<PathBuf>) -> Rc<Self> {
+    pub fn open(gb: &Rc<Omashot>, frame: Frame, source: Option<PathBuf>) -> Rc<Self> {
         let cfg = gb.config.get();
         // Restore an editable session when the file has one.
         let (frame, sheet) = match source.as_deref().and_then(session::load) {
@@ -393,8 +393,8 @@ impl EditorWindow {
 
     fn title_for(source: Option<&std::path::Path>) -> String {
         match source.and_then(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()) {
-            Some(n) => format!("{n} — Grabbit"),
-            None => "Untitled — Grabbit".into(),
+            Some(n) => format!("{n} — Omashot"),
+            None => "Untitled — Omashot".into(),
         }
     }
 
