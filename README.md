@@ -21,7 +21,7 @@ The plugin is QML that runs inside `omarchy-shell`; the capture and editor logic
 
 ```sh
 # 1. Shell plugin (bar widget + service), lands disabled until you enable it
-omarchy plugin add https://github.com/diyaclanker/omashot.git --enable
+omarchy plugin add https://github.com/diyahir/omashot.git --enable
 
 # 2. Native binary (Rust toolchain required: `sudo pacman -S rustup && rustup default stable`)
 sudo pacman -S --needed gtk4 libadwaita gtk4-layer-shell grim wl-clipboard tesseract tesseract-data-eng

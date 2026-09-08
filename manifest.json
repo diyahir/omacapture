@@ -6,7 +6,7 @@
   "author": "diyaclanker",
   "license": "BSD-3-Clause",
   "description": "Screenshot capture and annotation editor for Omarchy: frozen-screen region picker, shapes, arrows, text, blur, OCR, Quick Access cards, history, and an MCP server for agents.",
-  "homepage": "https://github.com/diyaclanker/omashot",
+  "homepage": "https://github.com/diyahir/omashot",
   "kinds": ["bar-widget", "service"],
   "entryPoints": {
     "barWidget": "BarWidget.qml",
