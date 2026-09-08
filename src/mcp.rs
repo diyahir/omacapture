@@ -14,7 +14,39 @@ use std::io::{BufRead, Write};
 
 const PROTOCOL_VERSION: &str = "2025-06-18";
 
-pub fn run() -> Result<()> {
+static READ_ONLY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn read_only() -> bool {
+    READ_ONLY.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Tools that write user-named files or change settings; hidden in read-only mode.
+const WRITING_TOOLS: &[&str] = &["annotate", "redact", "set_config"];
+
+/// Refuse to write outside the save folder, the private capture cache, the
+/// source image's directory, and any `[mcp] allowed_write_dirs` entries.
+fn ensure_write_allowed(target: &std::path::Path, source_dir: Option<&std::path::Path>) -> Result<()> {
+    let cfg = crate::config::Config::load();
+    let parent =
+        target.parent().filter(|p| !p.as_os_str().is_empty()).map(|p| p.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("."));
+    let parent = std::fs::canonicalize(&parent).with_context(|| format!("output directory does not exist: {}", parent.display()))?;
+    let mut roots: Vec<std::path::PathBuf> = vec![cfg.general.save_folder.clone(), crate::paths::temp_dir()];
+    roots.extend(cfg.mcp.allowed_write_dirs.iter().cloned());
+    if let Some(d) = source_dir {
+        roots.push(d.to_path_buf());
+    }
+    let allowed = roots.iter().filter_map(|r| std::fs::canonicalize(r).ok()).any(|r| parent.starts_with(&r));
+    if !allowed {
+        bail!(
+            "refusing to write {}: outside the allowed directories (save folder, capture cache, the source image's folder, and [mcp] allowed_write_dirs in config.toml)",
+            target.display()
+        );
+    }
+    Ok(())
+}
+
+pub fn run(read_only_mode: bool) -> Result<()> {
+    READ_ONLY.store(read_only_mode, std::sync::atomic::Ordering::Relaxed);
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout().lock();
     for line in stdin.lock().lines() {
@@ -66,7 +98,13 @@ fn handle(method: &str, params: &Value) -> Result<Value> {
                 text, annotate to draw markup onto an image file, and open_editor to hand an image to the human."
         })),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({"tools": tool_definitions()})),
+        "tools/list" => {
+            let tools: Vec<Value> = tool_definitions()
+                .into_iter()
+                .filter(|t| !read_only() || !WRITING_TOOLS.contains(&t.get("name").and_then(|n| n.as_str()).unwrap_or("")))
+                .collect();
+            Ok(json!({"tools": tools}))
+        }
         "tools/call" => {
             let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or(json!({}));
@@ -85,7 +123,7 @@ fn tool_definitions() -> Vec<Value> {
     let capture_common = json!({
         "cursor": {"type":"boolean","description":"Include the mouse cursor","default":false},
         "save": {"type":"boolean","description":"Write the capture to the configured screenshots folder (default) instead of a temp file","default":true},
-        "path": {"type":"string","description":"Explicit output path (must end in .png, .jpg, or .webp). Refuses to replace an existing file unless overwrite is true"},
+        "path": {"type":"string","description":"Explicit output path (must end in .png, .jpg, or .webp) inside the save folder, the capture cache, or an [mcp] allowed_write_dirs entry. Refuses to replace an existing file unless overwrite is true. Ignored in --read-only mode"},
         "overwrite": {"type":"boolean","description":"Allow replacing an existing file at path","default":false},
         "max_width": {"type":"integer","description":"Downscale the returned image to at most this width; the saved file keeps full resolution","default":1280},
         "return_image": {"type":"boolean","description":"Attach the image to the response","default":true}
@@ -146,7 +184,7 @@ fn tool_definitions() -> Vec<Value> {
             "description": "Draw annotations onto an image and write the result. Every editor tool is available: rect, filled_rect, oval, line, arrow, text, label, callout, highlight, blur, spotlight, counter, watermark, pencil, plus crop and canvas backgrounds. Coordinates are source-image pixels (see read_image or a capture result for the size). Call describe_annotations for the full per-type field reference. With open_in_editor=true the result is also saved as an editable session and opened for the human, who can keep editing every item.",
             "inputSchema": {"type":"object","required":["path","items"],"properties":{
                 "path":{"type":"string","description":"Source image"},
-                "output":{"type":"string","description":"Destination path (.png/.jpg/.webp); defaults to <source>-annotated.<ext>. Refuses to replace an existing file unless overwrite is true"},
+                "output":{"type":"string","description":"Destination path (.png/.jpg/.webp) inside the save folder, the capture cache, the source image's folder, or an [mcp] allowed_write_dirs entry; defaults to <source>-annotated.<ext>. Refuses to replace an existing file unless overwrite is true"},
                 "overwrite":{"type":"boolean","default":false},
                 "items":{"type":"array","description":"Annotation items, drawn in order (blur always renders under markup)","items":{"type":"object","required":["type"],"properties":{
                     "type":{"type":"string","enum":["rect","filled_rect","oval","line","arrow","text","label","callout","highlight","blur","spotlight","counter","watermark","pencil"]},
@@ -260,11 +298,13 @@ fn text(v: impl Into<String>) -> Value {
 /// Save a frame according to the tool args and build the standard response.
 fn finish_capture(frame: Frame, args: &Value, extra: Value) -> Result<Vec<Value>> {
     let cfg = crate::config::Config::load();
-    let path = if let Some(p) = str_arg(args, "path") {
+    let explicit = if read_only() { None } else { str_arg(args, "path") };
+    let path = if let Some(p) = explicit {
         let p = std::path::PathBuf::from(p);
+        ensure_write_allowed(&p, None)?;
         crate::export::save_to(&frame.image, &p, cfg.general.quality, bool_arg(args, "overwrite", false))?;
         p
-    } else if bool_arg(args, "save", true) {
+    } else if bool_arg(args, "save", true) && !read_only() {
         let p = crate::export::save(&frame.image, &cfg)?;
         if cfg.history.enabled {
             if let Ok(h) = crate::history::History::open() {
@@ -289,6 +329,9 @@ fn finish_capture(frame: Frame, args: &Value, extra: Value) -> Result<Vec<Value>
 }
 
 fn call_tool(name: &str, args: &Value) -> Result<Vec<Value>> {
+    if read_only() && WRITING_TOOLS.contains(&name) {
+        bail!("{name} is not available: this server runs in --read-only mode");
+    }
     match name {
         "list_monitors" => {
             let mons = hypr::monitors().context("hyprctl monitors")?;
@@ -416,6 +459,12 @@ fn call_tool(name: &str, args: &Value) -> Result<Vec<Value>> {
             let patch = args.get("changes").cloned().ok_or_else(|| anyhow!("changes required"))?;
             if !patch.is_object() {
                 bail!("changes must be an object nested by section");
+            }
+            let touches = |section: &str, key: Option<&str>| {
+                patch.get(section).map(|v| key.map(|k| v.get(k).is_some()).unwrap_or(true)).unwrap_or(false)
+            };
+            if touches("general", Some("save_folder")) || touches("mcp", None) {
+                bail!("general.save_folder and the [mcp] section define where agents may write; edit them in Preferences or config.toml, not over MCP");
             }
             let mut cfg = crate::config::Config::load();
             cfg.merge_json(&patch).context("invalid setting")?;
@@ -707,6 +756,7 @@ fn finish_document(args: &Value, path: &std::path::Path, doc: Document, item_cou
             }
         }
     };
+    ensure_write_allowed(&output, path.parent())?;
     crate::export::save_to(&out, &output, cfg.general.quality, bool_arg(args, "overwrite", false))?;
     if cfg.history.enabled {
         if let Ok(h) = crate::history::History::open() {

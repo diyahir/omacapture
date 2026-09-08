@@ -41,8 +41,10 @@ The plugin is QML that runs inside `omarchy-shell`; the capture and editor logic
 # 1. Shell plugin (bar widget + service)
 omarchy plugin add https://github.com/diyahir/omashot.git --enable
 
-# 2. Native binary (needs a Rust toolchain: `sudo pacman -S rustup && rustup default stable`)
-sudo pacman -S --needed gtk4 libadwaita gtk4-layer-shell grim wl-clipboard tesseract tesseract-data-eng
+# 2. Native binary. Omarchy already ships every runtime dependency
+#    (gtk4, libadwaita, gtk4-layer-shell, grim, wl-clipboard, tesseract);
+#    only a Rust toolchain is needed.
+omarchy install dev-env rust        # skip if you already have cargo
 cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omashot
 omarchy-shell omashot recheck
 ```
@@ -156,6 +158,9 @@ max_entries = 500
 [ocr]
 languages = "eng"                         # or $OMARCHY_OCR_LANGS, e.g. "eng+deu"
 copy_to_clipboard = true
+
+[mcp]
+allowed_write_dirs = []                   # extra folders agents may write images into
 ```
 
 The widget setting `clickMode` lives in `~/.config/omarchy/shell.json` under the bar layout entry.
@@ -184,7 +189,9 @@ The image above was produced entirely by an agent: one `capture_window` call, th
 | `get_config`, `set_config` | Read the configuration or change any setting; invalid values are rejected |
 | `history_list`, `read_image`, `open_editor` | Browse recent captures, look at a file, or hand an image to the human |
 
-`annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed. Tools that take an output `path` only write `.png`, `.jpg`, or `.webp` and refuse to replace an existing file unless `overwrite: true` is passed. Scratch captures live in `~/.local/share/omashot/captures` with owner-only permissions and are swept with the history retention window.
+`annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed.
+
+**What an agent can and cannot do.** Tools that take an output path only write `.png`, `.jpg`, or `.webp`, only inside your save folder, the private capture cache, the source image's own folder, or directories you list under `[mcp] allowed_write_dirs`, and never replace an existing file unless `overwrite: true` is passed. `set_config` cannot change the save folder or the `[mcp]` section, so an agent cannot widen its own fence. Run `omashot mcp --read-only` to expose only capture, OCR, read, and list tools: captures then go to the private cache and nothing user-named is ever written. Scratch captures live in `~/.local/share/omashot/captures` with owner-only permissions and are swept with the history retention window. There is no network access anywhere.
 
 ## Remove
 
@@ -197,7 +204,7 @@ Captures, history (`~/.local/share/omashot`), and config (`~/.config/omashot`) a
 
 ## Dependencies and license
 
-Runtime: `gtk4`, `libadwaita`, `gtk4-layer-shell`, `grim`, `wl-clipboard`; optional `tesseract` with a language pack for OCR, highlighter snapping, and auto-redact, `canberra-gtk-play` for the shutter sound. The plugin runs unsandboxed inside `omarchy-shell` like every Omarchy plugin; it only launches the `omashot` binary and never edits your configuration on its own.
+Runtime: `gtk4`, `libadwaita`, `gtk4-layer-shell`, `grim`, `wl-clipboard`, and `tesseract` with a language pack, all part of a stock Omarchy install; optional `canberra-gtk-play` for the shutter sound. The plugin runs unsandboxed inside `omarchy-shell` like every Omarchy plugin; it only launches the `omashot` binary and never edits your configuration on its own.
 
 BSD-3-Clause. See `LICENSE`.
 

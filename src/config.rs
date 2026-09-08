@@ -207,6 +207,14 @@ impl Default for Ocr {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
+pub struct Mcp {
+    /// Extra directories the MCP server may write images into, on top of the
+    /// save folder, the capture cache, and the source image's own directory.
+    pub allowed_write_dirs: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct Config {
     pub general: General,
     pub post_capture: PostCapture,
@@ -214,6 +222,7 @@ pub struct Config {
     pub annotate: Annotate,
     pub history: History,
     pub ocr: Ocr,
+    pub mcp: Mcp,
 }
 
 impl Config {
