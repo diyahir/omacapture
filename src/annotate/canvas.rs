@@ -79,24 +79,6 @@ impl Tool {
             Tool::Pencil => 'p',
         }
     }
-    pub fn icon(self) -> &'static str {
-        match self {
-            Tool::Select => "pointer-symbolic",
-            Tool::Crop => "crop-symbolic",
-            Tool::Rect => "rectangle-outline-symbolic",
-            Tool::FilledRect => "rectangle-filled-symbolic",
-            Tool::Oval => "circle-outline-symbolic",
-            Tool::Arrow => "arrow-symbolic",
-            Tool::Line => "line-symbolic",
-            Tool::Text => "text-symbolic",
-            Tool::Highlight => "highlighter-symbolic",
-            Tool::Blur => "blur-symbolic",
-            Tool::Spotlight => "spotlight-symbolic",
-            Tool::Counter => "counter-symbolic",
-            Tool::Watermark => "watermark-symbolic",
-            Tool::Pencil => "pencil-symbolic",
-        }
-    }
 }
 
 /// Tool option state that is not part of the shared `Style`.
@@ -232,7 +214,7 @@ impl EditorState {
         }
         let r = self.visible_rect();
         let margin = 24.0;
-        let z = ((vw - margin * 2.0) / r.w).min((vh - margin * 2.0) / r.h).min(1.0).max(0.05);
+        let z = ((vw - margin * 2.0) / r.w).min((vh - margin * 2.0) / r.h).clamp(0.05, 1.0);
         self.zoom = z;
         self.center_on(r);
     }
@@ -384,7 +366,14 @@ impl Canvas {
                     for i in 0..10 {
                         let spread = 16.0 * (1.0 - i as f64 / 10.0);
                         cr.set_source_rgba(0.0, 0.0, 0.0, shadow * 0.08);
-                        render::rounded_rect(cr, ix - spread, iy - spread + 8.0, crop.w + spread * 2.0, crop.h + spread * 2.0, radius + spread);
+                        render::rounded_rect(
+                            cr,
+                            ix - spread,
+                            iy - spread + 8.0,
+                            crop.w + spread * 2.0,
+                            crop.h + spread * 2.0,
+                            radius + spread,
+                        );
                         cr.fill().ok();
                     }
                 }
@@ -525,7 +514,7 @@ impl Canvas {
                 let center = g.bounding_box_center();
                 let mut s = c.state.borrow_mut();
                 let z = *base.borrow() * scale;
-                s.set_zoom(z, center.map(|(x, y)| (x, y)));
+                s.set_zoom(z, center);
                 drop(s);
                 c.changed();
             });
@@ -622,14 +611,10 @@ impl Canvas {
             Tool::Crop => {}
             Tool::Text => {
                 s.checkpoint();
-                let id = s.doc.add(
-                    Kind::Text { pos: p, text: String::new(), presentation: opts.text_presentation, tail: None },
-                    style,
-                );
+                let id = s.doc.add(Kind::Text { pos: p, text: String::new(), presentation: opts.text_presentation, tail: None }, style);
                 s.selection = vec![id];
                 drop(s);
                 self.begin_text_edit(id);
-                return;
             }
             Tool::Counter => {
                 s.checkpoint();
@@ -641,11 +626,7 @@ impl Canvas {
             }
             Tool::Pencil | Tool::Highlight => {
                 s.checkpoint();
-                let kind = if s.tool == Tool::Pencil {
-                    Kind::Pencil { points: vec![p] }
-                } else {
-                    Kind::Highlight { points: vec![p] }
-                };
+                let kind = if s.tool == Tool::Pencil { Kind::Pencil { points: vec![p] } } else { Kind::Highlight { points: vec![p] } };
                 let id = s.doc.add(kind, style);
                 s.selection.clear();
                 s.drag = Drag::Freehand { id };
@@ -709,7 +690,11 @@ impl Canvas {
                             *b = end;
                             *ctrl = curve_ctrl(*a, *b, *style);
                         }
-                        Kind::Rect { rect, .. } | Kind::Oval { rect } | Kind::Blur { rect, .. } | Kind::Spotlight { rect } | Kind::Watermark { rect, .. } => {
+                        Kind::Rect { rect, .. }
+                        | Kind::Oval { rect }
+                        | Kind::Blur { rect, .. }
+                        | Kind::Spotlight { rect }
+                        | Kind::Watermark { rect, .. } => {
                             if shift {
                                 let side = (end.x - start.x).abs().max((end.y - start.y).abs());
                                 end = Pt::new(start.x + side * (end.x - start.x).signum(), start.y + side * (end.y - start.y).signum());
@@ -880,15 +865,13 @@ impl Canvas {
                 }
             }
             Drag::Marquee { .. } => {}
-            Drag::CropCreate { start } => {
-                if start.dist(p) < 3.0 / s.zoom {
-                    if let Some(c) = s.crop.as_mut() {
-                        c.rect = RectF::new(0.0, 0.0, 0.0, 0.0);
-                    }
-                    let full = s.doc.image_rect();
-                    if let Some(c) = s.crop.as_mut() {
-                        c.rect = full;
-                    }
+            Drag::CropCreate { start } if start.dist(p) < 3.0 / s.zoom => {
+                if let Some(c) = s.crop.as_mut() {
+                    c.rect = RectF::new(0.0, 0.0, 0.0, 0.0);
+                }
+                let full = s.doc.image_rect();
+                if let Some(c) = s.crop.as_mut() {
+                    c.rect = full;
                 }
             }
             _ => {}
@@ -915,12 +898,15 @@ impl Canvas {
 
     // ----- text editing -----
 
+    #[allow(deprecated)]
     pub fn begin_text_edit(&self, id: u64) {
         self.commit_text_edit();
         let (pos, text, style, zoom, presentation) = {
             let s = self.state.borrow();
             let Some(it) = s.doc.item(id) else { return };
-            let Kind::Text { pos, text, presentation, .. } = &it.kind else { return };
+            let Kind::Text { pos, text, presentation, .. } = &it.kind else {
+                return;
+            };
             (s.to_screen(*pos), text.clone(), it.style.clone(), s.zoom, *presentation)
         };
         let view = gtk::TextView::new();
@@ -1081,7 +1067,9 @@ impl Canvas {
 
     pub fn auto_crop(&self) -> bool {
         let mut s = self.state.borrow_mut();
-        let Some(r) = content_bounds(&s.doc.source.image) else { return false };
+        let Some(r) = content_bounds(&s.doc.source.image) else {
+            return false;
+        };
         if let Some(c) = s.crop.as_mut() {
             c.rect = r;
         }
@@ -1447,7 +1435,7 @@ fn resize_rect_aspect(orig: RectF, handle: usize, p: Pt, t: f64) -> RectF {
         _ => ax,
     };
     let y = match handle {
-        0 | 1 | 2 => ay - h,
+        0..=2 => ay - h,
         3 | 7 => ay - h / 2.0,
         _ => ay,
     };
@@ -1676,7 +1664,7 @@ fn snap_to_content(img: &image::RgbaImage, r: RectF, zoom: f64) -> RectF {
         while y < y1.min(h) {
             let a = img.get_pixel((x - 1) as u32, y as u32);
             let b = img.get_pixel(x as u32, y as u32);
-            s += ((a[0] as i64 - b[0] as i64).abs() + (a[1] as i64 - b[1] as i64).abs() + (a[2] as i64 - b[2] as i64).abs()) as i64;
+            s += (a[0] as i64 - b[0] as i64).abs() + (a[1] as i64 - b[1] as i64).abs() + (a[2] as i64 - b[2] as i64).abs();
             y += 2;
         }
         s
@@ -1690,7 +1678,7 @@ fn snap_to_content(img: &image::RgbaImage, r: RectF, zoom: f64) -> RectF {
         while x < x1.min(w) {
             let a = img.get_pixel(x as u32, (y - 1) as u32);
             let b = img.get_pixel(x as u32, y as u32);
-            s += ((a[0] as i64 - b[0] as i64).abs() + (a[1] as i64 - b[1] as i64).abs() + (a[2] as i64 - b[2] as i64).abs()) as i64;
+            s += (a[0] as i64 - b[0] as i64).abs() + (a[1] as i64 - b[1] as i64).abs() + (a[2] as i64 - b[2] as i64).abs();
             x += 2;
         }
         s
@@ -1854,7 +1842,10 @@ mod tests {
         }
         c.set_tool(Tool::Select);
         c.state.borrow_mut().selection = vec![arrow.id];
-        let bx = match arrow.kind { Kind::Arrow { b, .. } => b, _ => unreachable!() };
+        let bx = match arrow.kind {
+            Kind::Arrow { b, .. } => b,
+            _ => unreachable!(),
+        };
         drag(&c, (bx.x, bx.y), (bx.x, bx.y + 50.0), none);
         let arrow2 = c.state.borrow().doc.item(arrow.id).cloned().unwrap();
         assert!(matches!(arrow2.kind, Kind::Arrow { b, .. } if (b.y - (bx.y + 50.0)).abs() < 0.01));
@@ -1882,7 +1873,13 @@ mod tests {
         c.end_drag(300.0, 50.0);
         c.begin_drag(330.0, 50.0, none);
         c.end_drag(330.0, 50.0);
-        let nums: Vec<u32> = items(&c).iter().filter_map(|i| match i.kind { Kind::Counter { number, .. } => Some(number), _ => None }).collect();
+        let nums: Vec<u32> = items(&c)
+            .iter()
+            .filter_map(|i| match i.kind {
+                Kind::Counter { number, .. } => Some(number),
+                _ => None,
+            })
+            .collect();
         assert_eq!(nums, vec![1, 2]);
 
         // Highlighter snaps to detected text lines.
@@ -1892,7 +1889,11 @@ mod tests {
         drag(&c, (105.0, 118.0), (190.0, 124.0), none);
         let hl = items(&c).last().cloned().unwrap();
         assert_eq!(items(&c).len(), before + 1);
-        assert!(matches!(&hl.kind, Kind::Highlight { points } if points.len() == 2 && points[0].x == 98.0 && points[1].x == 202.0 && points[0].y == 120.0), "{:?}", hl.kind);
+        assert!(
+            matches!(&hl.kind, Kind::Highlight { points } if points.len() == 2 && points[0].x == 98.0 && points[1].x == 202.0 && points[0].y == 120.0),
+            "{:?}",
+            hl.kind
+        );
 
         // Blur affects the export pixels inside its region only.
         c.set_tool(Tool::Blur);

@@ -33,9 +33,6 @@ impl Rect {
     pub fn contains(&self, px: f64, py: f64) -> bool {
         px >= self.x as f64 && py >= self.y as f64 && px < self.right() as f64 && py < self.bottom() as f64
     }
-    pub fn area(&self) -> i64 {
-        self.w as i64 * self.h as i64
-    }
     pub fn intersect(&self, o: &Rect) -> Option<Rect> {
         let x = self.x.max(o.x);
         let y = self.y.max(o.y);
@@ -136,7 +133,7 @@ pub fn surface_to_rgba(surf: &mut cairo::ImageSurface) -> image::RgbaImage {
         for x in 0..w as usize {
             let i = y * stride + x * 4;
             let a = data[i + 3] as u32;
-            let un = |c: u8| if a == 0 { 0 } else { ((c as u32 * 255 + a / 2) / a).min(255) as u8 };
+            let un = |c: u8| (c as u32 * 255 + a / 2).checked_div(a).map(|v| v.min(255) as u8).unwrap_or(0);
             img.put_pixel(x as u32, y as u32, image::Rgba([un(data[i + 2]), un(data[i + 1]), un(data[i]), a as u8]));
         }
     }

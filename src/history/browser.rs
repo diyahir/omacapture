@@ -2,16 +2,11 @@
 
 use crate::app::Omashot;
 use adw::prelude::*;
-use gtk::prelude::*;
 use std::rc::Rc;
 
 pub fn open(gb: &Rc<Omashot>) {
-    let win = adw::ApplicationWindow::builder()
-        .application(&gb.app)
-        .title("Capture History")
-        .default_width(900)
-        .default_height(600)
-        .build();
+    let win =
+        adw::ApplicationWindow::builder().application(&gb.app).title("Capture History").default_width(900).default_height(600).build();
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     let header = adw::HeaderBar::new();
     let search = gtk::SearchEntry::new();

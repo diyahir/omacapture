@@ -12,17 +12,12 @@ pub struct Renderer {
     blurred_bg_cache: Option<(i64, cairo::ImageSurface)>,
 }
 
+#[derive(Default)]
 pub struct DrawOptions<'a> {
     /// Items to skip (e.g. the text item currently being edited).
     pub hidden: &'a [u64],
     /// Extra dimming outside the crop when the crop tool is active.
     pub show_full_image: bool,
-}
-
-impl Default for DrawOptions<'_> {
-    fn default() -> Self {
-        Self { hidden: &[], show_full_image: false }
-    }
 }
 
 impl Renderer {
@@ -74,7 +69,16 @@ impl Renderer {
         cr.restore().ok();
     }
 
-    fn draw_blur(&mut self, cr: &cairo::Context, src: &image::RgbaImage, id: u64, r: RectF, effect: BlurEffect, strength: f64, radius: f64) {
+    fn draw_blur(
+        &mut self,
+        cr: &cairo::Context,
+        src: &image::RgbaImage,
+        id: u64,
+        r: RectF,
+        effect: BlurEffect,
+        strength: f64,
+        radius: f64,
+    ) {
         let x0 = r.x.floor().max(0.0) as i64;
         let y0 = r.y.floor().max(0.0) as i64;
         let x1 = (r.right().ceil() as i64).min(src.width() as i64);
@@ -83,10 +87,10 @@ impl Renderer {
             return;
         }
         let key = (id, x0, y0, x1, y1, effect, (strength * 10.0) as i64);
-        if !self.blur_cache.contains_key(&key) {
+        if let std::collections::hash_map::Entry::Vacant(e) = self.blur_cache.entry(key) {
             let region = image::imageops::crop_imm(src, x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32).to_image();
             let processed = effects::apply(&region, effect, strength, id as u32);
-            self.blur_cache.insert(key, rgba_to_surface(&processed));
+            e.insert(rgba_to_surface(&processed));
             if self.blur_cache.len() > 64 {
                 let stale: Vec<_> = self.blur_cache.keys().filter(|k| k.0 != id).take(16).cloned().collect();
                 for k in stale {
@@ -164,7 +168,7 @@ impl Renderer {
             Background::Blurred { strength, dim } => {
                 let key = (*strength * 10.0) as i64;
                 if self.blurred_bg_cache.as_ref().map(|c| c.0) != Some(key) {
-                    let small = image::imageops::thumbnail(&doc.source.image, 160, 90.max(1));
+                    let small = image::imageops::thumbnail(&doc.source.image, 160, 90);
                     let blurred = effects::gaussian(&small, (2.0 + strength * 1.5) as u32);
                     self.blurred_bg_cache = Some((key, rgba_to_surface(&blurred)));
                 }

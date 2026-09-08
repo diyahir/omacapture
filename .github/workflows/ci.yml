@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build and test (Arch Linux)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install toolchain and GTK stack
+        run: |
+          pacman -Syu --noconfirm --needed rust gcc pkgconf git \
+            gtk4 libadwaita gtk4-layer-shell cairo pango gdk-pixbuf2 \
+            xorg-server-xvfb
+      - uses: actions/checkout@v4
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-arch-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-arch-
+      - name: Build (release)
+        run: cargo build --release --locked
+      - name: Test under Xvfb
+        run: |
+          # The editor gesture test needs a display; layer-shell is not required for it.
+          GDK_BACKEND=x11 xvfb-run -a -s "-screen 0 1920x1080x24" cargo test --locked
+      - name: Smoke-test the binary
+        run: |
+          ./target/release/omashot --version
+          ./target/release/omashot keybinds show super-i
+          ./target/release/omashot keybinds show print
+
+  lint:
+    name: rustfmt and clippy
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install toolchain and GTK stack
+        run: |
+          pacman -Syu --noconfirm --needed rust rust-src clippy rustfmt gcc pkgconf git \
+            gtk4 libadwaita gtk4-layer-shell cairo pango gdk-pixbuf2
+      - uses: actions/checkout@v4
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-lint-${{ runner.os }}-arch-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-lint-${{ runner.os }}-arch-
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy (warnings are errors)
+        run: cargo clippy --release --locked -- -D warnings
+
+  plugin:
+    name: Plugin manifest and marketplace baseline
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install tools
+        run: pacman -Syu --noconfirm --needed git python qt6-declarative
+      - uses: actions/checkout@v4
+      - name: Validate manifest, layout, symlinks, baseline patterns
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 scripts/validate-plugin.py
+      - name: QML syntax check
+        run: |
+          # qmllint cannot resolve the Omarchy shell modules here; only syntax and
+          # unresolved-import-independent problems are checked.
+          for f in BarWidget.qml Panel.qml Service.qml; do
+            /usr/lib/qt6/bin/qmllint --json - "$f" 2>/dev/null | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          fatal = [w for f in data.get("files", []) for w in f.get("warnings", []) if w.get("type") == "critical" and "import" not in w.get("id", "")]
+          for w in fatal: print(w)
+          sys.exit(1 if fatal else 0)' || exit 1
+          done
+      - name: Manifest and QML agree on the plugin id
+        run: |
+          id=$(python3 -c 'import json; print(json.load(open("manifest.json"))["id"])')
+          grep -q "moduleName: \"$id\"" BarWidget.qml && grep -q "moduleName: \"$id\"" Panel.qml
+
+  audit:
+    name: cargo audit (RustSec advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  secrets-and-privacy:
+    name: No secrets or personal data in the tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: No home-directory paths in shipped files
+        run: |
+          # Screenshots and docs must not leak a real username or machine path.
+          if git grep -nE "/home/[a-z0-9_-]+" -- ':!scripts/' ':!.github/' ':!src/' ':!tools/' | grep -vE "/home/user/|\\$HOME|~/" ; then
+            echo "real home paths found in shipped files"; exit 1; fi

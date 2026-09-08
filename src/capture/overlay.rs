@@ -270,9 +270,14 @@ fn install_draw(area: &gtk::DrawingArea, state: &Rc<RefCell<State>>, idx: usize)
             cr.stroke().ok();
             // Corner + edge handles.
             for (hx, hy) in [
-                (x, y), (x + rw / 2.0, y), (x + rw, y),
-                (x, y + rh / 2.0), (x + rw, y + rh / 2.0),
-                (x, y + rh), (x + rw / 2.0, y + rh), (x + rw, y + rh),
+                (x, y),
+                (x + rw / 2.0, y),
+                (x + rw, y),
+                (x, y + rh / 2.0),
+                (x + rw, y + rh / 2.0),
+                (x, y + rh),
+                (x + rw / 2.0, y + rh),
+                (x + rw, y + rh),
             ] {
                 cr.rectangle(hx - HANDLE / 2.0, hy - HANDLE / 2.0, HANDLE, HANDLE);
                 cr.fill().ok();
@@ -340,17 +345,6 @@ fn draw_label(cr: &cairo::Context, text: &str, x: f64, y: f64, w: f64, h: f64) {
     cr.move_to(bx + pad, by + pad);
     cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
     pangocairo::functions::show_layout(cr, &layout);
-}
-
-pub fn rounded_rect(cr: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
-    let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
-    use std::f64::consts::PI;
-    cr.new_sub_path();
-    cr.arc(x + w - r, y + r, r, -PI / 2.0, 0.0);
-    cr.arc(x + w - r, y + h - r, r, 0.0, PI / 2.0);
-    cr.arc(x + r, y + h - r, r, PI / 2.0, PI);
-    cr.arc(x + r, y + r, r, PI, 3.0 * PI / 2.0);
-    cr.close_path();
 }
 
 fn draw_magnifier(cr: &cairo::Context, surface: &cairo::ImageSurface, scale: f64, lx: f64, ly: f64, w: f64, h: f64) {

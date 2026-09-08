@@ -38,7 +38,9 @@ pub fn run() -> Result<()> {
         }
         let response = match handle(method, &params) {
             Ok(result) => json!({"jsonrpc":"2.0","id":id,"result":result}),
-            Err(e) => json!({"jsonrpc":"2.0","id":id,"error":{"code":-32603,"message":e.to_string()}}),
+            Err(e) => {
+                json!({"jsonrpc":"2.0","id":id,"error":{"code":-32603,"message":e.to_string()}})
+            }
         };
         write_msg(&mut stdout, &response)?;
     }
@@ -323,7 +325,10 @@ fn call_tool(name: &str, args: &Value) -> Result<Vec<Value>> {
                 int_arg(args, "width").ok_or_else(|| anyhow!("width required"))?.max(1) as i32,
                 int_arg(args, "height").ok_or_else(|| anyhow!("height required"))?.max(1) as i32,
             );
-            let scale = hypr::monitors().ok().and_then(|ms| ms.iter().find(|m| m.logical_rect().intersect(&r).is_some()).map(|m| m.scale)).unwrap_or(1.0);
+            let scale = hypr::monitors()
+                .ok()
+                .and_then(|ms| ms.iter().find(|m| m.logical_rect().intersect(&r).is_some()).map(|m| m.scale))
+                .unwrap_or(1.0);
             let frame = grim::capture_region(r, scale, bool_arg(args, "cursor", false))?;
             finish_capture(frame, args, json!({"region": r}))
         }
@@ -390,7 +395,8 @@ fn call_tool(name: &str, args: &Value) -> Result<Vec<Value>> {
             };
             if bool_arg(args, "words", false) {
                 let words = crate::ocr::words(&png, &langs)?;
-                let v: Vec<Value> = words.iter().map(|w| json!({"text": w.text, "x": w.x, "y": w.y, "width": w.w, "height": w.h})).collect();
+                let v: Vec<Value> =
+                    words.iter().map(|w| json!({"text": w.text, "x": w.x, "y": w.y, "width": w.w, "height": w.h})).collect();
                 Ok(vec![text(serde_json::to_string_pretty(&v)?)])
             } else {
                 Ok(vec![text(crate::ocr::recognize(&png, &langs)?)])
@@ -472,7 +478,9 @@ fn annotate_tool(args: &Value) -> Result<Vec<Value>> {
         let kind_name = str_arg(it, "type").unwrap_or("rect");
         let mut style = base_style.clone();
         style.color = color_of(it, "color", style.color);
-        if let Some(w) = f_arg(it, "width").filter(|_| !matches!(kind_name, "rect" | "filled_rect" | "oval" | "blur" | "spotlight" | "watermark" | "text")) {
+        if let Some(w) = f_arg(it, "width")
+            .filter(|_| !matches!(kind_name, "rect" | "filled_rect" | "oval" | "blur" | "spotlight" | "watermark" | "text"))
+        {
             style.width = w;
         }
         if let Some(w) = f_arg(it, "stroke_width") {
@@ -505,8 +513,14 @@ fn annotate_tool(args: &Value) -> Result<Vec<Value>> {
         };
         let endpoints = || -> Result<(Pt, Pt)> {
             Ok((
-                Pt::new(f_arg(it, "x1").ok_or_else(|| anyhow!("{kind_name}: x1 required"))?, f_arg(it, "y1").ok_or_else(|| anyhow!("y1 required"))?),
-                Pt::new(f_arg(it, "x2").ok_or_else(|| anyhow!("{kind_name}: x2 required"))?, f_arg(it, "y2").ok_or_else(|| anyhow!("y2 required"))?),
+                Pt::new(
+                    f_arg(it, "x1").ok_or_else(|| anyhow!("{kind_name}: x1 required"))?,
+                    f_arg(it, "y1").ok_or_else(|| anyhow!("y1 required"))?,
+                ),
+                Pt::new(
+                    f_arg(it, "x2").ok_or_else(|| anyhow!("{kind_name}: x2 required"))?,
+                    f_arg(it, "y2").ok_or_else(|| anyhow!("y2 required"))?,
+                ),
             ))
         };
         let points = || -> Vec<Pt> {
@@ -611,7 +625,11 @@ fn annotate_tool(args: &Value) -> Result<Vec<Value>> {
             "counter" | "number" => {
                 let n = int_arg(it, "number").map(|n| n as u32).unwrap_or(counter);
                 counter = n + 1;
-                Kind::Counter { center: Pt::new(f_arg(it, "x").unwrap_or(0.0), f_arg(it, "y").unwrap_or(0.0)), number: n, size: f_arg(it, "size").unwrap_or(5.0) }
+                Kind::Counter {
+                    center: Pt::new(f_arg(it, "x").unwrap_or(0.0), f_arg(it, "y").unwrap_or(0.0)),
+                    number: n,
+                    size: f_arg(it, "size").unwrap_or(5.0),
+                }
             }
             "watermark" => {
                 let r = if it.get("x").is_some() { rect()? } else { doc.image_rect() };
@@ -680,7 +698,8 @@ fn finish_document(args: &Value, path: &std::path::Path, doc: Document, item_cou
             let ext = path.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_else(|| "png".into());
             let mut n = 1;
             loop {
-                let candidate = path.with_file_name(format!("{stem}-annotated{}.{ext}", if n == 1 { String::new() } else { format!("-{n}") }));
+                let candidate =
+                    path.with_file_name(format!("{stem}-annotated{}.{ext}", if n == 1 { String::new() } else { format!("-{n}") }));
                 if !candidate.exists() {
                     break candidate;
                 }
@@ -808,7 +827,6 @@ Example:
   {"type":"highlight","x":40,"y":200,"width":200,"height":24},
   {"type":"spotlight","x":250,"y":200,"width":120,"height":80,"dim":0.4},
   {"type":"watermark","text":"DRAFT","style":"tiled"}]}"##;
-
 
 trait ColorDefault {
     fn unwrap_or_default_color(self) -> Color;

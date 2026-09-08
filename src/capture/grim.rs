@@ -5,13 +5,7 @@ use anyhow::{bail, Context, Result};
 use std::process::Command;
 
 fn run(args: &[&str]) -> Result<image::RgbaImage> {
-    let out = Command::new("grim")
-        .args(args)
-        .arg("-t")
-        .arg("png")
-        .arg("-")
-        .output()
-        .context("failed to run `grim`; is it installed?")?;
+    let out = Command::new("grim").args(args).arg("-t").arg("png").arg("-").output().context("failed to run `grim`; is it installed?")?;
     if !out.status.success() {
         bail!("grim failed: {}", String::from_utf8_lossy(&out.stderr).trim());
     }

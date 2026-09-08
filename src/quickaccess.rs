@@ -85,14 +85,7 @@ impl QuickAccessPanel {
     }
 }
 
-fn build_card(
-    gb: &Rc<Omashot>,
-    frame: Frame,
-    path: PathBuf,
-    is_saved: bool,
-    width: i32,
-    auto_dismiss_secs: u32,
-) -> gtk::Box {
+fn build_card(gb: &Rc<Omashot>, frame: Frame, path: PathBuf, is_saved: bool, width: i32, auto_dismiss_secs: u32) -> gtk::Box {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
     card.add_css_class("qa-card");
     card.set_overflow(gtk::Overflow::Hidden);

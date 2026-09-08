@@ -7,6 +7,7 @@ use gtk::prelude::*;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+#[allow(dead_code)]
 pub struct Outcome {
     pub saved_path: Option<PathBuf>,
 }
