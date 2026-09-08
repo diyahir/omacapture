@@ -429,6 +429,25 @@ impl Default for Canvas {
 }
 
 impl Canvas {
+    /// The one-click "Omarchy frame": the whole current wallpaper, lightly
+    /// blurred, at its own aspect ratio, with the capture floating on top.
+    pub fn omarchy_frame(capture_w: f64, capture_h: f64) -> Canvas {
+        let aspect = crate::theme::wallpaper_size().map(|(w, h)| (w as f64, h as f64)).unwrap_or((16.0, 9.0));
+        // Enough padding that the wallpaper reads as a backdrop, not a border.
+        let padding = (capture_w.max(capture_h) * 0.12).clamp(64.0, 320.0);
+        Canvas {
+            background: Background::Wallpaper { strength: 3.0, dim: 0.12 },
+            padding,
+            corner_radius: 12.0,
+            shadow: 0.55,
+            aspect: Some(aspect),
+        }
+    }
+
+    pub fn is_omarchy_frame(&self) -> bool {
+        matches!(self.background, Background::Wallpaper { .. })
+    }
+
     pub fn is_plain(&self) -> bool {
         self.background == Background::None && self.padding <= 0.0 && self.corner_radius <= 0.0 && self.aspect.is_none()
     }

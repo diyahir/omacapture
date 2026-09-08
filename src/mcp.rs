@@ -257,7 +257,7 @@ fn tool_definitions() -> Vec<Value> {
                     "number":{"type":"integer"},"size":{"type":"number","description":"Counter size 1-12"}
                 }}},
                 "crop":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"}}},
-                "background":{"type":"string","description":"'wallpaper' (the user's current Omarchy wallpaper, blurred), a gradient preset name (pink orange, blue purple, green blue, orange red, purple pink, blue green, yellow orange, cyan blue), a hex color, 'blurred', or 'none'"},
+                "background":{"type":"string","description":"'wallpaper' (the Omarchy frame: the user's whole current wallpaper, lightly blurred, at its own aspect with the capture floating on it), a gradient preset name (pink orange, blue purple, green blue, orange red, purple pink, blue green, yellow orange, cyan blue), a hex color, 'blurred', or 'none'"},
                 "padding":{"type":"number"},
                 "corner_radius":{"type":"number","description":"Rounded corners of the image inside the canvas"},
                 "shadow":{"type":"number","description":"0-1"},
@@ -934,7 +934,11 @@ fn annotate_tool(args: &Value) -> Result<Vec<Value>> {
     if let Some(bg) = str_arg(args, "background") {
         doc.sheet.canvas.background = match bg {
             "none" => Background::None,
-            "wallpaper" | "omarchy" => Background::Wallpaper { strength: 8.0, dim: 0.25 },
+            "wallpaper" | "omarchy" | "omarchy-frame" => {
+                let (w, h) = (doc.width(), doc.height());
+                doc.sheet.canvas = Canvas::omarchy_frame(w, h);
+                doc.sheet.canvas.background.clone()
+            }
             "blurred" => Background::Blurred { strength: 8.0, dim: 0.15 },
             hex if hex.starts_with('#') => Background::Solid { color: Color::parse(hex).unwrap_or(Color::rgba(0.1, 0.1, 0.1, 1.0)) },
             name => {
@@ -943,7 +947,7 @@ fn annotate_tool(args: &Value) -> Result<Vec<Value>> {
                 Background::Gradient { from: Color::parse(a).unwrap(), to: Color::parse(b).unwrap(), angle: 135.0 }
             }
         };
-        if doc.sheet.canvas.background != Background::None && f_arg(args, "padding").is_none() {
+        if doc.sheet.canvas.background != Background::None && f_arg(args, "padding").is_none() && !doc.sheet.canvas.is_omarchy_frame() {
             doc.sheet.canvas.padding = 48.0;
         }
     }

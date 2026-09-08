@@ -21,6 +21,7 @@ pub struct EditorWindow {
     sidebar: Sidebar,
     tool_buttons: RefCell<Vec<(Tool, gtk::ToggleButton)>>,
     zoom_label: gtk::Label,
+    frame_btn: gtk::ToggleButton,
     undo_btn: gtk::Button,
     redo_btn: gtk::Button,
     words: RefCell<Option<Vec<crate::ocr::Word>>>,
@@ -151,9 +152,11 @@ impl EditorWindow {
                 let mut st = canvas.state.borrow_mut();
                 match cfg.annotate.default_background.as_str() {
                     "wallpaper" => {
-                        st.doc.sheet.canvas.background = Background::Wallpaper { strength: 8.0, dim: 0.25 };
-                        st.doc.sheet.canvas.padding = cfg.annotate.default_padding;
-                        st.doc.sheet.canvas.corner_radius = 12.0;
+                        let (w, h) = (st.doc.width(), st.doc.height());
+                        st.doc.sheet.canvas = super::model::Canvas::omarchy_frame(w, h);
+                        if cfg.annotate.default_padding > 0.0 {
+                            st.doc.sheet.canvas.padding = cfg.annotate.default_padding;
+                        }
                     }
                     "blurred" => {
                         st.doc.sheet.canvas.background = Background::Blurred { strength: 8.0, dim: 0.15 };
@@ -191,6 +194,14 @@ impl EditorWindow {
         header.pack_start(&undo_btn);
         header.pack_start(&redo_btn);
 
+        let frame_btn = gtk::ToggleButton::new();
+        let frame_content = adw::ButtonContent::new();
+        frame_content.set_icon_name("image-x-generic-symbolic");
+        frame_content.set_label("Omarchy frame");
+        frame_btn.set_child(Some(&frame_content));
+        frame_btn.set_tooltip_text(Some("Frame the capture with your blurred Omarchy wallpaper (Ctrl+Shift+F)"));
+        frame_btn.add_css_class("flat");
+        header.pack_end(&frame_btn);
         let sidebar_btn = gtk::ToggleButton::new();
         sidebar_btn.set_icon_name("sidebar-show-right-symbolic");
         sidebar_btn.set_tooltip_text(Some("Canvas & background (Ctrl+B)"));
@@ -234,6 +245,7 @@ impl EditorWindow {
             sidebar,
             tool_buttons: RefCell::new(Vec::new()),
             zoom_label: zoom_label.clone(),
+            frame_btn: frame_btn.clone(),
             undo_btn: undo_btn.clone(),
             redo_btn: redo_btn.clone(),
             words: RefCell::new(None),
@@ -385,6 +397,12 @@ impl EditorWindow {
         {
             let t = this.clone();
             sidebar_btn.connect_toggled(move |b| t.sidebar.revealer.set_reveal_child(b.is_active()));
+            let t = this.clone();
+            frame_btn.connect_toggled(move |b| {
+                if !t.updating.get() {
+                    t.set_omarchy_frame(b.is_active());
+                }
+            });
         }
 
         // Context menu on the canvas.
@@ -1034,7 +1052,10 @@ impl EditorWindow {
         let sb = &self.sidebar;
         let bg = match sb.bg_kind.selected() {
             0 => Background::None,
-            1 => Background::Wallpaper { strength: sb.blur_strength.value(), dim: 0.25 },
+            1 => {
+                self.set_omarchy_frame(true);
+                return;
+            }
             2 => {
                 let cur = self.canvas.state.borrow().doc.sheet.canvas.background.clone();
                 match cur {
@@ -1062,6 +1083,19 @@ impl EditorWindow {
                 c.padding = 48.0;
             }
         });
+    }
+
+    /// One-click frame: the whole wallpaper behind the capture, or back to plain.
+    pub fn set_omarchy_frame(&self, on: bool) {
+        let (w, h) = {
+            let st = self.canvas.state.borrow();
+            let r = st.doc.crop_rect();
+            (r.w, r.h)
+        };
+        self.canvas.update_canvas("frame", move |c| {
+            *c = if on { super::model::Canvas::omarchy_frame(w, h) } else { super::model::Canvas::default() };
+        });
+        self.canvas.zoom_fit();
     }
 
     // ----- refresh UI from state -----
@@ -1219,6 +1253,7 @@ impl EditorWindow {
             Background::Blurred { .. } => 4,
             Background::Image { .. } => 5,
         });
+        self.frame_btn.set_active(c.is_omarchy_frame());
         self.sidebar.padding.set_value(c.padding);
         self.sidebar.radius.set_value(c.corner_radius);
         self.sidebar.shadow.set_value(c.shadow);
@@ -1276,6 +1311,10 @@ impl EditorWindow {
                     gdk::Key::_0 | gdk::Key::KP_0 => t.canvas.zoom_fit(),
                     gdk::Key::_1 | gdk::Key::KP_1 => t.canvas.zoom_actual(),
                     gdk::Key::e => t.export_as(),
+                    gdk::Key::f | gdk::Key::F if shift => {
+                        let on = !t.canvas.state.borrow().doc.sheet.canvas.is_omarchy_frame();
+                        t.set_omarchy_frame(on);
+                    }
                     gdk::Key::w => {
                         if t.confirm_close() == glib::Propagation::Proceed {
                             t.win.destroy();

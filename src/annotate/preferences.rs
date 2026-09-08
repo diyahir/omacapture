@@ -392,7 +392,7 @@ pub fn open(gb: &Rc<Omacapture>) {
         let gb = outer.clone();
         g_ann.add(&spin_row(
             "Frame padding",
-            Some("Pixels of background around the capture"),
+            Some("Pixels of background around the capture; 0 picks it from the capture size"),
             0.0,
             512.0,
             8.0,

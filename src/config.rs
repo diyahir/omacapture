@@ -242,8 +242,9 @@ pub struct Annotate {
     pub auto_redact: bool,
     pub watermark_text: String,
     pub watermark_image: Option<PathBuf>,
-    /// Frame new captures in the editor: "none", "wallpaper" (blurred Omarchy background), or "blurred".
+    /// Frame new captures in the editor: "none", "wallpaper" (the Omarchy frame), or "blurred".
     pub default_background: String,
+    /// Padding for that frame; 0 lets the preset pick from the capture size.
     pub default_padding: f64,
 }
 
@@ -264,7 +265,7 @@ impl Default for Annotate {
             watermark_text: String::new(),
             watermark_image: None,
             default_background: "none".into(),
-            default_padding: 64.0,
+            default_padding: 0.0,
         }
     }
 }

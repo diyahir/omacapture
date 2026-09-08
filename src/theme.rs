@@ -69,6 +69,11 @@ pub fn wallpaper_path() -> Option<PathBuf> {
     target.is_file().then_some(target)
 }
 
+/// Width/height of the current wallpaper, for aspect-matched frames.
+pub fn wallpaper_size() -> Option<(u32, u32)> {
+    image::image_dimensions(wallpaper_path()?).ok()
+}
+
 pub fn load() -> Option<ThemeColors> {
     let text = std::fs::read_to_string(colors_path()?).ok()?;
     toml::from_str(&text).ok()

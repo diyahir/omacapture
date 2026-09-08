@@ -32,7 +32,7 @@ Select, crop (aspect presets, edge snapping, auto-crop), rectangle, filled recta
 - **Auto-redact** pixelates emails, phone numbers, URLs, card numbers, API tokens, and `key=value` credentials found by local OCR.
 - **Editable sessions**: every save keeps the original pixels and annotations, so a saved screenshot reopens with everything still editable.
 - **Theme aware**: colors come from the active Omarchy theme, corners are square like the shell, the font is the system monospace, and the swatch palette is built from the theme. Theme switches apply instantly.
-- **Wallpaper frame**: one click in the editor's canvas sidebar sets your current Omarchy wallpaper, blurred, as the background around the capture. Turn it on for every new capture under Preferences → Editor → "Frame new captures with", or ask for it over MCP with `background: "wallpaper"`.
+- **Omarchy frame**: the "Omarchy frame" button in the editor toolbar (or `Ctrl+Shift+F`) puts the capture on your whole current Omarchy wallpaper, lightly blurred, at the wallpaper's own aspect ratio, with rounded corners and a shadow. Turn it on for every new capture under Preferences → Editor → "Frame new captures with", or ask for it over MCP with `background: "wallpaper"`.
 
 <img src="docs/screenshots/wallpaper-frame.png" alt="A capture framed by the blurred Omarchy wallpaper" width="760">
 
@@ -153,7 +153,7 @@ global_open = ""
 
 [annotate]
 default_background = "none"               # none | wallpaper (blurred Omarchy background) | blurred, applied to new captures
-default_padding = 64.0
+default_padding = 0.0                     # 0 picks the padding from the capture size
 stroke_color = "#ff3b30"                  # the theme red is used while this is the stock default
 fill_color = "#ff3b3080"
 text_color = "#ff3b30"

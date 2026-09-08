@@ -189,10 +189,14 @@ impl Renderer {
                 let key = (*strength * 10.0) as i64;
                 if self.wallpaper_cache.as_ref().map(|c| c.0) != Some(key) {
                     let surf = crate::theme::wallpaper_path().and_then(|p| image::open(p).ok()).map(|img| {
-                        // Downscale first: the blur radius then acts on a small image, which is
-                        // both fast and gives the soft, defocused look.
-                        let small = image::imageops::thumbnail(&img.to_rgba8(), 320, 180);
-                        let blurred = effects::gaussian(&small, (2.0 + strength * 1.5) as u32);
+                        // Keep enough resolution that the wallpaper stays recognizable;
+                        // strength 1-20 maps to a gentle 2-40 px blur at ~1280 px wide.
+                        let rgba = img.to_rgba8();
+                        let (iw, ih) = (rgba.width().max(1), rgba.height().max(1));
+                        let tw = iw.min(1280);
+                        let th = (ih as f64 * tw as f64 / iw as f64).round().max(1.0) as u32;
+                        let small = image::imageops::resize(&rgba, tw, th, image::imageops::FilterType::Triangle);
+                        let blurred = effects::gaussian(&small, (strength * 2.0).clamp(1.0, 40.0) as u32);
                         rgba_to_surface(&blurred)
                     });
                     match surf {
