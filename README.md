@@ -91,7 +91,7 @@ Add to `~/.config/omarchy/extensions/omarchy-menu.jsonc` to list it under Captur
 | `Ctrl+scroll`, `Ctrl+0`, `Ctrl+1`, Space+drag | Zoom, fit, actual size, pan |
 | `Enter` / `Esc` / `A` while cropping | Apply / cancel / auto-crop to content |
 | Shift while drawing | Square, circle, or 45° constraint |
-| `Ctrl+B` | Toggle the canvas and background sidebar |
+| `Ctrl+B` | Toggle the settings panel (tool properties and canvas) |
 
 ## Configuration
 

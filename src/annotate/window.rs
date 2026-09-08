@@ -32,16 +32,21 @@ pub struct EditorWindow {
 
 struct Props {
     bar: gtk::Box,
-    palette: gtk::Box,
+    title: gtk::Label,
+    palette: gtk::FlowBox,
+    palette_box: gtk::Box,
     color_btn: gtk::ColorDialogButton,
     width: gtk::SpinButton,
     width_box: gtk::Box,
     line_style: gtk::DropDown,
+    line_box: gtk::Box,
     radius: gtk::SpinButton,
     radius_box: gtk::Box,
     font_size: gtk::SpinButton,
     font_box: gtk::Box,
     text_pres: gtk::DropDown,
+    text_box: gtk::Box,
+    arrow_box: gtk::Box,
     arrow_style: gtk::DropDown,
     arrow_type: gtk::DropDown,
     head_start: gtk::DropDown,
@@ -169,7 +174,8 @@ impl EditorWindow {
 
         let sidebar_btn = gtk::ToggleButton::new();
         sidebar_btn.set_icon_name("sidebar-show-right-symbolic");
-        sidebar_btn.set_tooltip_text(Some("Canvas & background (Ctrl+B)"));
+        sidebar_btn.set_tooltip_text(Some("Toggle the settings panel (Ctrl+B)"));
+        sidebar_btn.set_active(true);
         header.pack_end(&sidebar_btn);
         let menu_btn = gtk::MenuButton::new();
         menu_btn.set_icon_name("open-menu-symbolic");
@@ -177,16 +183,9 @@ impl EditorWindow {
 
         root.append(&header);
         let props = Self::build_props();
-        // Never let a wide property bar dictate the window's minimum width.
-        let props_scroller = gtk::ScrolledWindow::new();
-        props_scroller.set_policy(gtk::PolicyType::External, gtk::PolicyType::Never);
-        props_scroller.set_child(Some(&props.bar));
-        props_scroller.set_propagate_natural_height(true);
-        root.append(&props_scroller);
-
         let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         body.append(&canvas.widget);
-        let sidebar = Self::build_sidebar();
+        let sidebar = Self::build_sidebar(&props.bar);
         body.append(&sidebar.revealer);
         body.set_vexpand(true);
         root.append(&body);
@@ -418,13 +417,23 @@ impl EditorWindow {
     // ----- property bar -----
 
     fn build_props() -> Props {
-        let bar = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        bar.add_css_class("toolbar");
-        bar.add_css_class("props-bar");
-        bar.set_margin_start(8);
-        bar.set_margin_end(8);
+        // Vertical inspector: one control per row, label above, so nothing gets
+        // lost in a long horizontal strip.
+        let bar = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        bar.add_css_class("inspector");
 
-        let palette = gtk::Box::new(gtk::Orientation::Horizontal, 2);
+        let title = gtk::Label::new(Some("Select"));
+        title.add_css_class("heading");
+        title.set_xalign(0.0);
+        bar.append(&title);
+
+        let palette = gtk::FlowBox::new();
+        palette.set_selection_mode(gtk::SelectionMode::None);
+        palette.set_max_children_per_line(10);
+        palette.set_min_children_per_line(5);
+        palette.set_column_spacing(2);
+        palette.set_row_spacing(2);
+        palette.set_halign(gtk::Align::Start);
         let swatches: Vec<String> = crate::theme::current().map(|t| t.palette()).unwrap_or_else(|| PALETTE.iter().map(|s| s.to_string()).collect());
         for hex in swatches {
             let hex = hex.as_str();
@@ -432,114 +441,139 @@ impl EditorWindow {
             b.add_css_class("swatch");
             b.add_css_class("flat");
             let css = gtk::CssProvider::new();
-            css.load_from_string(&format!(".swatch {{ background: {hex}; min-width: 14px; min-height: 14px; border-radius: 0; padding: 2px; margin: 2px; border: 1px solid rgba(0,0,0,0.35); }} .swatch:hover {{ border-color: @window_fg_color; }}"));
+            css.load_from_string(&format!(".swatch {{ background: {hex}; min-width: 18px; min-height: 18px; border-radius: 0; padding: 0; margin: 0; border: 1px solid rgba(0,0,0,0.35); }} .swatch:hover {{ border-color: @window_fg_color; }}"));
             b.style_context().add_provider(&css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
             b.set_tooltip_text(Some(hex));
-            b.set_valign(gtk::Align::Center);
-            palette.append(&b);
+            palette.insert(&b, -1);
         }
         let color_btn = gtk::ColorDialogButton::new(Some(gtk::ColorDialog::new()));
         color_btn.set_valign(gtk::Align::Center);
         color_btn.set_tooltip_text(Some("Custom color"));
-        palette.append(&color_btn);
-        bar.append(&palette);
+        let color_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        color_row.append(&palette);
+        color_row.append(&color_btn);
+        let palette_box = labeled_v("Color", &color_row);
+        bar.append(&palette_box);
 
         let width = gtk::SpinButton::with_range(1.0, 20.0, 1.0);
-        width.set_valign(gtk::Align::Center);
-        let width_box = labeled("Width", &width);
+        width.set_hexpand(true);
+        let width_box = labeled_v("Stroke width", &width);
         bar.append(&width_box);
         let line_style = dropdown(&["Solid", "Dashed", "Dotted"]);
-        bar.append(&line_style);
+        let line_box = labeled_v("Line style", &line_style);
+        bar.append(&line_box);
         let radius = gtk::SpinButton::with_range(0.0, 200.0, 1.0);
-        radius.set_valign(gtk::Align::Center);
-        let radius_box = labeled("Radius", &radius);
+        radius.set_hexpand(true);
+        let radius_box = labeled_v("Corner radius", &radius);
         bar.append(&radius_box);
         let font_size = gtk::SpinButton::with_range(6.0, 300.0, 1.0);
-        font_size.set_valign(gtk::Align::Center);
-        let font_box = labeled("Size", &font_size);
+        font_size.set_hexpand(true);
+        let font_box = labeled_v("Font size", &font_size);
         bar.append(&font_box);
         let text_pres = dropdown(&["Plain", "Label", "Callout"]);
-        bar.append(&text_pres);
+        let text_box = labeled_v("Text style", &text_pres);
+        bar.append(&text_box);
+
         let arrow_style = dropdown(&["Straight", "Curved right", "Curved left"]);
         let arrow_type = dropdown(&["Classic", "Tapered", "Outlined"]);
         let head_start = dropdown(&["Start: none", "Start: arrow", "Start: circle"]);
         let head_end = dropdown(&["End: none", "End: arrow", "End: circle"]);
-        for d in [&arrow_style, &arrow_type, &head_start, &head_end] {
-            bar.append(d);
-        }
+        let arrow_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        arrow_box.append(&labeled_v("Arrow", &arrow_style));
+        arrow_box.append(&arrow_type);
+        let heads = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        heads.set_homogeneous(true);
+        heads.append(&head_start);
+        heads.append(&head_end);
+        arrow_box.append(&heads);
+        bar.append(&arrow_box);
+
         let blur_effect = dropdown(&BlurEffect::ALL.map(|e| e.label()));
-        let blur_strength = scale(1.0, 20.0, 1.0, 110);
-        let redact_btn = gtk::Button::with_label("Auto-redact");
+        let blur_strength = scale(1.0, 20.0, 1.0, 160);
+        blur_strength.set_hexpand(true);
+        let redact_btn = gtk::Button::with_label("Auto-redact sensitive text");
         redact_btn.set_tooltip_text(Some("Detect and pixelate emails, phone numbers, tokens, and card numbers"));
-        redact_btn.set_valign(gtk::Align::Center);
-        let blur_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        blur_box.append(&blur_effect);
-        blur_box.append(&labeled("Strength", &blur_strength));
+        let blur_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        blur_box.append(&labeled_v("Blur effect", &blur_effect));
+        blur_box.append(&labeled_v("Strength", &blur_strength));
         blur_box.append(&redact_btn);
         bar.append(&blur_box);
-        let dim = scale(0.1, 0.9, 0.05, 110);
-        let dim_box = labeled("Dim", &dim);
+
+        let dim = scale(0.1, 0.9, 0.05, 160);
+        dim.set_hexpand(true);
+        let dim_box = labeled_v("Spotlight dim", &dim);
         bar.append(&dim_box);
-        let counter_size = scale(1.0, 12.0, 1.0, 110);
-        let counter_box = labeled("Size", &counter_size);
+        let counter_size = scale(1.0, 12.0, 1.0, 160);
+        counter_size.set_hexpand(true);
+        let counter_box = labeled_v("Counter size", &counter_size);
         bar.append(&counter_box);
+
         let wm_text = gtk::Entry::new();
         wm_text.set_placeholder_text(Some("Watermark text"));
-        wm_text.set_valign(gtk::Align::Center);
         let wm_style = dropdown(&["Single", "Diagonal", "Tiled"]);
-        let wm_opacity = scale(0.05, 1.0, 0.05, 90);
-        let wm_rotation = scale(-45.0, 45.0, 1.0, 90);
-        let wm_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        wm_box.append(&wm_text);
+        let wm_opacity = scale(0.05, 1.0, 0.05, 160);
+        wm_opacity.set_hexpand(true);
+        let wm_rotation = scale(-45.0, 45.0, 1.0, 160);
+        wm_rotation.set_hexpand(true);
+        let wm_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        wm_box.append(&labeled_v("Watermark", &wm_text));
         wm_box.append(&wm_style);
-        wm_box.append(&labeled("Opacity", &wm_opacity));
-        wm_box.append(&labeled("Angle", &wm_rotation));
+        wm_box.append(&labeled_v("Opacity", &wm_opacity));
+        wm_box.append(&labeled_v("Angle", &wm_rotation));
         bar.append(&wm_box);
-        let text_snap = gtk::ToggleButton::with_label("Snap to text");
+
+        let text_snap = gtk::ToggleButton::with_label("Snap to text lines");
         text_snap.set_tooltip_text(Some("Snap highlighter strokes to detected text lines (hold Ctrl to bypass)"));
-        text_snap.set_valign(gtk::Align::Center);
         bar.append(&text_snap);
 
-        let crop_box = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        let crop_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
         let crop_aspect = dropdown(&CROP_ASPECTS.map(|a| a.0));
         let crop_portrait = gtk::ToggleButton::with_label("Portrait");
-        crop_portrait.set_valign(gtk::Align::Center);
-        let crop_snap = gtk::ToggleButton::with_label("Snap edges");
-        crop_snap.set_valign(gtk::Align::Center);
-        let crop_auto = gtk::Button::with_label("Auto (A)");
-        crop_auto.set_valign(gtk::Align::Center);
+        let crop_snap = gtk::ToggleButton::with_label("Snap edges to content");
+        let crop_auto = gtk::Button::with_label("Auto-crop to content (A)");
         let crop_cancel = gtk::Button::with_label("Cancel");
-        crop_cancel.set_valign(gtk::Align::Center);
-        let crop_apply = gtk::Button::with_label("Apply crop");
+        let crop_apply = gtk::Button::with_label("Apply crop (Enter)");
         crop_apply.add_css_class("suggested-action");
-        crop_apply.set_valign(gtk::Align::Center);
-        crop_box.append(&labeled("Aspect", &crop_aspect));
-        crop_box.append(&crop_portrait);
+        let aspect_row = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        aspect_row.append(&crop_aspect);
+        aspect_row.append(&crop_portrait);
+        crop_box.append(&labeled_v("Aspect ratio", &aspect_row));
         crop_box.append(&crop_snap);
         crop_box.append(&crop_auto);
-        crop_box.append(&crop_cancel);
-        crop_box.append(&crop_apply);
+        let crop_actions = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        crop_actions.set_homogeneous(true);
+        crop_actions.append(&crop_cancel);
+        crop_actions.append(&crop_apply);
+        crop_box.append(&crop_actions);
         crop_auto.set_widget_name("crop-auto");
         crop_cancel.set_widget_name("crop-cancel");
         crop_apply.set_widget_name("crop-apply");
         bar.append(&crop_box);
 
-        let hint = gtk::Label::new(Some("Select an item or pick a tool"));
+        let hint = gtk::Label::new(Some("Pick a tool in the toolbar, or select an item on the canvas, to edit its properties here."));
         hint.add_css_class("dim-label");
+        hint.set_wrap(true);
+        hint.set_max_width_chars(30);
+        hint.set_xalign(0.0);
         bar.append(&hint);
 
         Props {
             bar,
+            title,
             palette,
+            palette_box,
             color_btn,
             width,
             width_box,
             line_style,
+            line_box,
             radius,
             radius_box,
             font_size,
             font_box,
             text_pres,
+            text_box,
+            arrow_box,
             arrow_style,
             arrow_type,
             head_start,
@@ -571,7 +605,8 @@ impl EditorWindow {
         // Palette swatches.
         let mut child = p.palette.first_child();
         while let Some(c) = child {
-            if let Some(b) = c.downcast_ref::<gtk::Button>() {
+            let button = c.downcast_ref::<gtk::FlowBoxChild>().and_then(|fc| fc.child()).and_then(|w| w.downcast::<gtk::Button>().ok());
+            if let Some(b) = button {
                 if let Some(hex) = b.tooltip_text().map(|t| t.to_string()) {
                     let t = self.clone();
                     b.connect_clicked(move |_| {
@@ -843,16 +878,23 @@ impl EditorWindow {
 
     // ----- sidebar -----
 
-    fn build_sidebar() -> Sidebar {
+    fn build_sidebar(inspector: &gtk::Box) -> Sidebar {
         let revealer = gtk::Revealer::new();
         revealer.set_transition_type(gtk::RevealerTransitionType::SlideLeft);
+        revealer.set_reveal_child(true);
         let outer = gtk::Box::new(gtk::Orientation::Vertical, 12);
-        outer.set_size_request(250, -1);
+        outer.set_size_request(300, -1);
+        outer.set_hexpand(false);
         outer.set_margin_top(12);
         outer.set_margin_bottom(12);
         outer.set_margin_start(12);
         outer.set_margin_end(12);
         outer.add_css_class("sidebar");
+        outer.append(inspector);
+        let sep = gtk::Separator::new(gtk::Orientation::Horizontal);
+        sep.set_margin_top(6);
+        sep.set_margin_bottom(6);
+        outer.append(&sep);
         let title = gtk::Label::new(Some("Canvas"));
         title.add_css_class("heading");
         title.set_xalign(0.0);
@@ -864,6 +906,7 @@ impl EditorWindow {
         gradients.set_halign(gtk::Align::Start);
         let flow = gtk::FlowBox::new();
         flow.set_max_children_per_line(4);
+        flow.set_min_children_per_line(4);
         flow.set_selection_mode(gtk::SelectionMode::None);
         for (name, a, b) in GRADIENTS {
             let btn = gtk::Button::new();
@@ -878,6 +921,7 @@ impl EditorWindow {
         outer.append(&gradients);
         let solid = gtk::ColorDialogButton::new(Some(gtk::ColorDialog::new()));
         solid.set_rgba(&gdk::RGBA::new(0.12, 0.12, 0.14, 1.0));
+        solid.set_halign(gtk::Align::Start);
         outer.append(&labeled_v("Solid color", &solid));
         let image_btn = gtk::Button::with_label("Choose image…");
         outer.append(&image_btn);
@@ -899,6 +943,9 @@ impl EditorWindow {
         outer.append(&labeled_v("Aspect ratio", &ab));
         let scroller = gtk::ScrolledWindow::new();
         scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        scroller.set_size_request(324, -1);
+        scroller.set_max_content_width(324);
+        scroller.set_hexpand(false);
         scroller.set_child(Some(&outer));
         revealer.set_child(Some(&scroller));
         Sidebar { revealer, bg_kind, gradients, solid, image_btn, blur_strength, padding, radius, shadow, aspect, portrait }
@@ -1073,15 +1120,23 @@ impl EditorWindow {
         let show_snap = !cropping && tool == Tool::Highlight;
 
         let p = &self.props;
-        p.palette.set_visible(show_color);
+        let title = if cropping {
+            "Crop".to_string()
+        } else if selected.len() > 1 {
+            format!("{} items", selected.len())
+        } else if let Some(k) = first_kind_name(kinds.first().copied()) {
+            k.to_string()
+        } else {
+            tool.label().to_string()
+        };
+        p.title.set_text(&title);
+        p.palette_box.set_visible(show_color);
         p.width_box.set_visible(show_width);
-        p.line_style.set_visible(show_line);
+        p.line_box.set_visible(show_line);
         p.radius_box.set_visible(show_radius);
         p.font_box.set_visible(show_font);
-        p.text_pres.set_visible(show_text);
-        for d in [&p.arrow_style, &p.arrow_type, &p.head_start, &p.head_end] {
-            d.set_visible(show_arrow);
-        }
+        p.text_box.set_visible(show_text);
+        p.arrow_box.set_visible(show_arrow);
         p.blur_box.set_visible(show_blur);
         p.dim_box.set_visible(show_dim);
         p.counter_box.set_visible(show_counter);
@@ -1525,6 +1580,23 @@ impl EditorWindow {
             Err(_) => glib::ControlFlow::Break,
         });
     }
+}
+
+fn first_kind_name(k: Option<&Kind>) -> Option<&'static str> {
+    Some(match k? {
+        Kind::Rect { filled: true, .. } => "Filled rectangle",
+        Kind::Rect { .. } => "Rectangle",
+        Kind::Oval { .. } => "Oval",
+        Kind::Line { .. } => "Line",
+        Kind::Arrow { .. } => "Arrow",
+        Kind::Text { .. } => "Text",
+        Kind::Highlight { .. } => "Highlight",
+        Kind::Blur { .. } => "Blur",
+        Kind::Spotlight { .. } => "Spotlight",
+        Kind::Counter { .. } => "Counter",
+        Kind::Watermark { .. } => "Watermark",
+        Kind::Pencil { .. } => "Pencil",
+    })
 }
 
 fn labeled_v(label: &str, w: &impl IsA<gtk::Widget>) -> gtk::Box {
