@@ -19,6 +19,7 @@ pub struct Omashot {
     pub last_area: RefCell<Option<Rect>>,
     /// `--wait`: print a JSON result line to stdout when the capture completes, then quit.
     pub wait_mode: std::cell::Cell<bool>,
+    _config_monitor: RefCell<Option<gio::FileMonitor>>,
     _hold: RefCell<Option<gio::ApplicationHoldGuard>>,
 }
 
@@ -44,13 +45,16 @@ pub fn run() -> glib::ExitCode {
         let config = Config::load();
         let history = History::open().expect("history db");
         let _ = history.prune(config.history.retention_days, config.history.max_entries);
+        let config_handle = ConfigHandle::new(config);
+        let config_monitor = config_handle.watch();
         let gb = Rc::new(Omashot {
             app: app.clone(),
-            config: ConfigHandle::new(config),
+            config: config_handle,
             history: RefCell::new(history),
             quick_access: RefCell::new(QuickAccessPanel::new()),
             last_area: RefCell::new(None),
             wait_mode: std::cell::Cell::new(false),
+            _config_monitor: RefCell::new(config_monitor),
             _hold: RefCell::new(None),
         });
         INSTANCE.with(|i| *i.borrow_mut() = Some(gb));

@@ -1,6 +1,7 @@
 //! User configuration, persisted at `~/.config/omashot/config.toml`.
 
 use anyhow::Result;
+use gtk::{gio, glib};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -272,5 +273,73 @@ impl ConfigHandle {
         if let Err(e) = guard.save() {
             tracing::warn!("saving config failed: {e}");
         }
+    }
+
+    /// Re-read the file (after an external edit) if it parses.
+    pub fn reload(&self) -> bool {
+        let path = crate::paths::config_file();
+        match std::fs::read_to_string(&path).ok().and_then(|t| toml::from_str::<Config>(&t).ok()) {
+            Some(cfg) => {
+                *self.0.write().unwrap() = cfg;
+                tracing::info!("config reloaded from {}", path.display());
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Watch the config file and its directory so manual or MCP edits apply live.
+    pub fn watch(&self) -> Option<gio::FileMonitor> {
+        use gio::prelude::*;
+        let dir = gio::File::for_path(crate::paths::config_dir());
+        let monitor = dir.monitor_directory(gio::FileMonitorFlags::WATCH_MOVES, gio::Cancellable::NONE).ok()?;
+        monitor.set_rate_limit(100);
+        let handle = self.clone();
+        monitor.connect_changed(move |_, file, _, event| {
+            let is_config = file.basename().map(|b| b == std::path::Path::new("config.toml")).unwrap_or(false);
+            if is_config
+                && matches!(
+                    event,
+                    gio::FileMonitorEvent::ChangesDoneHint | gio::FileMonitorEvent::Changed | gio::FileMonitorEvent::Created | gio::FileMonitorEvent::MovedIn | gio::FileMonitorEvent::Renamed
+                )
+            {
+                let h = handle.clone();
+                glib::timeout_add_local_once(std::time::Duration::from_millis(150), move || {
+                    h.reload();
+                });
+            }
+        });
+        Some(monitor)
+    }
+}
+
+impl Config {
+    /// Every key with its current value, as TOML text.
+    pub fn to_toml(&self) -> String {
+        toml::to_string_pretty(self).unwrap_or_default()
+    }
+
+    /// Merge a JSON object of overrides (nested by section) into this config.
+    pub fn merge_json(&mut self, patch: &serde_json::Value) -> Result<()> {
+        let mut current = serde_json::to_value(&*self)?;
+        deep_merge(&mut current, patch);
+        *self = serde_json::from_value(current)?;
+        Ok(())
+    }
+}
+
+fn deep_merge(target: &mut serde_json::Value, patch: &serde_json::Value) {
+    match (target, patch) {
+        (serde_json::Value::Object(t), serde_json::Value::Object(p)) => {
+            for (k, v) in p {
+                match t.get_mut(k) {
+                    Some(existing) if existing.is_object() && v.is_object() => deep_merge(existing, v),
+                    _ => {
+                        t.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        (t, p) => *t = p.clone(),
     }
 }
