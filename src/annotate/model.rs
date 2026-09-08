@@ -393,6 +393,11 @@ pub enum Background {
     Image {
         path: std::path::PathBuf,
     },
+    /// The current Omarchy wallpaper, blurred, framing the screenshot.
+    Wallpaper {
+        strength: f64,
+        dim: f64,
+    },
 }
 
 pub const GRADIENTS: [(&str, &str, &str); 8] = [

@@ -10,6 +10,7 @@ pub struct Renderer {
     pub base: cairo::ImageSurface,
     blur_cache: HashMap<(u64, i64, i64, i64, i64, BlurEffect, i64), cairo::ImageSurface>,
     blurred_bg_cache: Option<(i64, cairo::ImageSurface)>,
+    wallpaper_cache: Option<(i64, cairo::ImageSurface)>,
 }
 
 #[derive(Default)]
@@ -22,12 +23,13 @@ pub struct DrawOptions<'a> {
 
 impl Renderer {
     pub fn new(source: &Frame) -> Self {
-        Self { base: source.to_cairo_surface(), blur_cache: HashMap::new(), blurred_bg_cache: None }
+        Self { base: source.to_cairo_surface(), blur_cache: HashMap::new(), blurred_bg_cache: None, wallpaper_cache: None }
     }
 
     pub fn invalidate(&mut self) {
         self.blur_cache.clear();
         self.blurred_bg_cache = None;
+        self.wallpaper_cache = None;
     }
 
     /// Draw the image plus every annotation in image coordinates.
@@ -175,6 +177,41 @@ impl Renderer {
                 let surf = &self.blurred_bg_cache.as_ref().unwrap().1;
                 cr.save().ok();
                 cr.scale(w / surf.width() as f64, h / surf.height() as f64);
+                cr.set_source_surface(surf, 0.0, 0.0).ok();
+                cr.source().set_filter(cairo::Filter::Bilinear);
+                cr.paint().ok();
+                cr.restore().ok();
+                cr.set_source_rgba(0.0, 0.0, 0.0, dim.clamp(0.0, 1.0));
+                cr.rectangle(0.0, 0.0, w, h);
+                cr.fill().ok();
+            }
+            Background::Wallpaper { strength, dim } => {
+                let key = (*strength * 10.0) as i64;
+                if self.wallpaper_cache.as_ref().map(|c| c.0) != Some(key) {
+                    let surf = crate::theme::wallpaper_path().and_then(|p| image::open(p).ok()).map(|img| {
+                        // Downscale first: the blur radius then acts on a small image, which is
+                        // both fast and gives the soft, defocused look.
+                        let small = image::imageops::thumbnail(&img.to_rgba8(), 320, 180);
+                        let blurred = effects::gaussian(&small, (2.0 + strength * 1.5) as u32);
+                        rgba_to_surface(&blurred)
+                    });
+                    match surf {
+                        Some(surf) => self.wallpaper_cache = Some((key, surf)),
+                        None => {
+                            // No wallpaper available: fall back to a neutral dark field.
+                            cr.set_source_rgb(0.12, 0.12, 0.13);
+                            cr.rectangle(0.0, 0.0, w, h);
+                            cr.fill().ok();
+                            return;
+                        }
+                    }
+                }
+                let surf = &self.wallpaper_cache.as_ref().unwrap().1;
+                let (sw, sh) = (surf.width() as f64, surf.height() as f64);
+                let scale = (w / sw).max(h / sh);
+                cr.save().ok();
+                cr.translate((w - sw * scale) / 2.0, (h - sh * scale) / 2.0);
+                cr.scale(scale, scale);
                 cr.set_source_surface(surf, 0.0, 0.0).ok();
                 cr.source().set_filter(cairo::Filter::Bilinear);
                 cr.paint().ok();

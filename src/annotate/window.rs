@@ -144,8 +144,25 @@ impl EditorWindow {
         };
 
         let canvas = Canvas::new(frame, style, options);
-        if let Some(sheet) = sheet {
-            canvas.state.borrow_mut().doc.sheet = sheet;
+        match sheet {
+            Some(sheet) => canvas.state.borrow_mut().doc.sheet = sheet,
+            None => {
+                // Fresh capture: apply the configured default frame, if any.
+                let mut st = canvas.state.borrow_mut();
+                match cfg.annotate.default_background.as_str() {
+                    "wallpaper" => {
+                        st.doc.sheet.canvas.background = Background::Wallpaper { strength: 8.0, dim: 0.25 };
+                        st.doc.sheet.canvas.padding = cfg.annotate.default_padding;
+                        st.doc.sheet.canvas.corner_radius = 12.0;
+                    }
+                    "blurred" => {
+                        st.doc.sheet.canvas.background = Background::Blurred { strength: 8.0, dim: 0.15 };
+                        st.doc.sheet.canvas.padding = cfg.annotate.default_padding;
+                        st.doc.sheet.canvas.corner_radius = 12.0;
+                    }
+                    _ => {}
+                }
+            }
         }
 
         let win = adw::ApplicationWindow::builder()
@@ -869,7 +886,7 @@ impl EditorWindow {
         title.set_xalign(0.0);
         outer.append(&title);
 
-        let bg_kind = dropdown(&["No background", "Gradient", "Solid color", "Blurred image", "Image file"]);
+        let bg_kind = dropdown(&["No background", "Omarchy wallpaper (blurred)", "Gradient", "Solid color", "Blurred image", "Image file"]);
         outer.append(&labeled_v("Background", &bg_kind));
         let gradients = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         gradients.set_halign(gtk::Align::Start);
@@ -932,7 +949,7 @@ impl EditorWindow {
                 dialog.open(Some(&t.win), gio::Cancellable::NONE, move |res| {
                     if let Ok(file) = res {
                         if let Some(path) = file.path() {
-                            t2.sidebar.bg_kind.set_selected(4);
+                            t2.sidebar.bg_kind.set_selected(5);
                             t2.canvas.update_canvas("bg", move |c| c.background = Background::Image { path });
                         }
                     }
@@ -951,7 +968,7 @@ impl EditorWindow {
                     let (_, a, b) = GRADIENTS[i.min(GRADIENTS.len() - 1)];
                     btn.connect_clicked(move |_| {
                         t.updating.set(true);
-                        t.sidebar.bg_kind.set_selected(1);
+                        t.sidebar.bg_kind.set_selected(2);
                         t.updating.set(false);
                         let (from, to) = (Color::parse(a).unwrap(), Color::parse(b).unwrap());
                         t.canvas.update_canvas("bg", move |c| {
@@ -1017,7 +1034,8 @@ impl EditorWindow {
         let sb = &self.sidebar;
         let bg = match sb.bg_kind.selected() {
             0 => Background::None,
-            1 => {
+            1 => Background::Wallpaper { strength: sb.blur_strength.value(), dim: 0.25 },
+            2 => {
                 let cur = self.canvas.state.borrow().doc.sheet.canvas.background.clone();
                 match cur {
                     Background::Gradient { .. } => cur,
@@ -1027,8 +1045,8 @@ impl EditorWindow {
                     }
                 }
             }
-            2 => Background::Solid { color: Color::from_gdk(&sb.solid.rgba()) },
-            3 => Background::Blurred { strength: sb.blur_strength.value(), dim: 0.15 },
+            3 => Background::Solid { color: Color::from_gdk(&sb.solid.rgba()) },
+            4 => Background::Blurred { strength: sb.blur_strength.value(), dim: 0.15 },
             _ => {
                 let cur = self.canvas.state.borrow().doc.sheet.canvas.background.clone();
                 match cur {
@@ -1195,10 +1213,11 @@ impl EditorWindow {
         let c = &s.doc.sheet.canvas;
         self.sidebar.bg_kind.set_selected(match c.background {
             Background::None => 0,
-            Background::Gradient { .. } => 1,
-            Background::Solid { .. } => 2,
-            Background::Blurred { .. } => 3,
-            Background::Image { .. } => 4,
+            Background::Wallpaper { .. } => 1,
+            Background::Gradient { .. } => 2,
+            Background::Solid { .. } => 3,
+            Background::Blurred { .. } => 4,
+            Background::Image { .. } => 5,
         });
         self.sidebar.padding.set_value(c.padding);
         self.sidebar.radius.set_value(c.corner_radius);
