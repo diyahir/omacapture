@@ -49,7 +49,7 @@ cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omashot
 omarchy-shell omashot recheck
 ```
 
-`cargo install` puts `omashot` in `~/.cargo/bin`, which Omarchy already has on `PATH`. The widget appears in the bar's right section; move it with `omarchy bar move io.github.diyaclanker.omashot --section center`.
+`cargo install` puts `omashot` in `~/.cargo/bin`; the plugin looks there (and in `~/.local/bin`) itself, so it works even though the shell's own `PATH` does not include it. The widget appears in the bar's right section; move it with `omarchy bar move io.github.diyaclanker.omashot --section center`.
 
 ## Use
 
