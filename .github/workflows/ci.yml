@@ -23,7 +23,7 @@ jobs:
           pacman -Syu --noconfirm --needed rust gcc pkgconf git \
             gtk4 libadwaita gtk4-layer-shell cairo pango gdk-pixbuf2 \
             xorg-server-xvfb
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Cache cargo
         uses: actions/cache@v4
         with:
@@ -54,7 +54,7 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed rust gcc pkgconf git \
             gtk4 libadwaita gtk4-layer-shell cairo pango gdk-pixbuf2
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Cache cargo
         uses: actions/cache@v4
         with:
@@ -76,7 +76,7 @@ jobs:
     steps:
       - name: Install tools
         run: pacman -Syu --noconfirm --needed git python qt6-declarative
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate manifest, layout, symlinks, baseline patterns
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -102,7 +102,7 @@ jobs:
     name: cargo audit (RustSec advisories)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -111,7 +111,7 @@ jobs:
     name: No secrets or personal data in the tree
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: gitleaks
