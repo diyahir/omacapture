@@ -11,6 +11,8 @@ pub struct Renderer {
     blur_cache: HashMap<(u64, i64, i64, i64, i64, BlurEffect, i64), cairo::ImageSurface>,
     blurred_bg_cache: Option<(i64, cairo::ImageSurface)>,
     wallpaper_cache: Option<(i64, cairo::ImageSurface)>,
+    /// Wallpaper resized to ~1280 px once; blurring this is the only per-strength work.
+    wallpaper_base: Option<image::RgbaImage>,
 }
 
 #[derive(Default)]
@@ -23,13 +25,20 @@ pub struct DrawOptions<'a> {
 
 impl Renderer {
     pub fn new(source: &Frame) -> Self {
-        Self { base: source.to_cairo_surface(), blur_cache: HashMap::new(), blurred_bg_cache: None, wallpaper_cache: None }
+        Self {
+            base: source.to_cairo_surface(),
+            blur_cache: HashMap::new(),
+            blurred_bg_cache: None,
+            wallpaper_cache: None,
+            wallpaper_base: None,
+        }
     }
 
     pub fn invalidate(&mut self) {
         self.blur_cache.clear();
         self.blurred_bg_cache = None;
         self.wallpaper_cache = None;
+        self.wallpaper_base = None;
     }
 
     /// Draw the image plus every annotation in image coordinates.
@@ -188,19 +197,22 @@ impl Renderer {
             Background::Wallpaper { strength, dim } => {
                 let key = (*strength * 10.0) as i64;
                 if self.wallpaper_cache.as_ref().map(|c| c.0) != Some(key) {
-                    let surf = crate::theme::wallpaper_path().and_then(|p| image::open(p).ok()).map(|img| {
-                        // Keep enough resolution that the wallpaper stays recognizable;
+                    if self.wallpaper_base.is_none() {
+                        self.wallpaper_base = crate::theme::wallpaper_path().and_then(|p| image::open(p).ok()).map(|img| {
+                            // Keep enough resolution that the wallpaper stays recognizable.
+                            let rgba = img.to_rgba8();
+                            let (iw, ih) = (rgba.width().max(1), rgba.height().max(1));
+                            let tw = iw.min(1280);
+                            let th = (ih as f64 * tw as f64 / iw as f64).round().max(1.0) as u32;
+                            image::imageops::resize(&rgba, tw, th, image::imageops::FilterType::Triangle)
+                        });
+                    }
+                    match &self.wallpaper_base {
                         // strength 1-20 maps to a gentle 2-40 px blur at ~1280 px wide.
-                        let rgba = img.to_rgba8();
-                        let (iw, ih) = (rgba.width().max(1), rgba.height().max(1));
-                        let tw = iw.min(1280);
-                        let th = (ih as f64 * tw as f64 / iw as f64).round().max(1.0) as u32;
-                        let small = image::imageops::resize(&rgba, tw, th, image::imageops::FilterType::Triangle);
-                        let blurred = effects::gaussian(&small, (strength * 2.0).clamp(1.0, 40.0) as u32);
-                        rgba_to_surface(&blurred)
-                    });
-                    match surf {
-                        Some(surf) => self.wallpaper_cache = Some((key, surf)),
+                        Some(base) => {
+                            let blurred = effects::gaussian(base, (strength * 2.0).clamp(1.0, 40.0) as u32);
+                            self.wallpaper_cache = Some((key, rgba_to_surface(&blurred)));
+                        }
                         None => {
                             // No wallpaper available: fall back to a neutral dark field.
                             cr.set_source_rgb(0.12, 0.12, 0.13);

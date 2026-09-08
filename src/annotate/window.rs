@@ -957,8 +957,22 @@ impl EditorWindow {
             sb.bg_kind.connect_selected_notify(move |_| t.apply_background());
             let t = self.clone();
             sb.solid.connect_rgba_notify(move |_| t.apply_background());
+            // Re-blurring the wallpaper is the one expensive canvas edit: coalesce
+            // slider ticks and apply once the drag has paused.
             let t = self.clone();
-            sb.blur_strength.connect_value_changed(move |_| t.apply_background());
+            let pending: Rc<RefCell<Option<glib::SourceId>>> = Rc::new(RefCell::new(None));
+            sb.blur_strength.connect_value_changed(move |_| {
+                if let Some(id) = pending.borrow_mut().take() {
+                    id.remove();
+                }
+                let t2 = t.clone();
+                let p2 = pending.clone();
+                let id = glib::timeout_add_local_once(std::time::Duration::from_millis(120), move || {
+                    *p2.borrow_mut() = None;
+                    t2.apply_background();
+                });
+                *pending.borrow_mut() = Some(id);
+            });
             let t = self.clone();
             sb.image_btn.connect_clicked(move |_| {
                 let dialog = gtk::FileDialog::new();

@@ -1286,7 +1286,6 @@ impl Canvas {
         let mut s = self.state.borrow_mut();
         s.checkpoint_coalesced(key);
         f(&mut s.doc.sheet.canvas);
-        s.renderer.invalidate();
         drop(s);
         self.changed();
     }
