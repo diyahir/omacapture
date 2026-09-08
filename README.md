@@ -13,7 +13,7 @@ Screenshot capture and annotation for [Omarchy](https://omarchy.org). A bar widg
 </tr>
 <tr>
 <td><img src="docs/screenshots/quick-access.png" alt="Quick Access card" width="360"></td>
-<td><b>Quick Access.</b> After every capture a small card slides into the corner: copy, edit, open, delete, or drag the file straight into another app. <code>c</code> <code>e</code> <code>o</code> <code>Delete</code> work while hovering.</td>
+<td><b>Quick Access.</b> After every capture a small card slides into the corner: copy, edit, open, delete, or drag the file straight into another app. Hover it and press <code>c</code> <code>e</code> <code>o</code> <code>Delete</code> <code>Esc</code>, or keep your hands on the keyboard: while a card is showing, <code>Super+E</code> edits, <code>Super+D</code> copies and dismisses, <code>Super+Delete</code> deletes the newest capture. Those three exist only while a card is on screen.</td>
 </tr>
 <tr>
 <td><img src="docs/screenshots/bar-panel.png" alt="Bar panel" width="420"></td>
@@ -57,7 +57,7 @@ omarchy-shell omashot recheck
 | --- | --- |
 | Bar icon | Left click: capture (mode from the widget's `clickMode` setting). Middle click: capture and annotate. Right click: panel |
 | `omarchy-shell omashot area` | Through the shell service; also `window`, `full`, `annotate`, `ocr`, `history`, `settings`, `edit <path>`, `status` |
-| `omashot area` | The binary directly; same verbs plus `annotate FILE`, `daemon`, `mcp`, and `--wait` for a JSON result |
+| `omashot area` | The binary directly; same verbs plus `annotate FILE`, `qa copy\|edit\|open\|delete\|dismiss` for the newest card, `daemon`, `mcp`, and `--wait` for a JSON result |
 | `omashot FILE` | Opens a file in the editor, so `OMARCHY_SCREENSHOT_EDITOR=omashot` routes Omarchy's own screenshot notification into Omashot |
 
 ### Keybindings
@@ -135,6 +135,7 @@ auto_dismiss_secs = 8                     # 0 keeps cards until dismissed
 max_cards = 4
 thumbnail_width = 240
 keep_editing_after_drag = false
+global_shortcuts = true                   # Super+E / Super+D / Super+Delete while a card is showing
 
 [annotate]
 stroke_color = "#ff3b30"                  # the theme red is used while this is the stock default

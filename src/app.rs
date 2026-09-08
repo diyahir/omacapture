@@ -96,6 +96,11 @@ pub fn dispatch(gb: &Rc<Omashot>, cmd: Command) {
         Command::Annotate { file } => crate::annotate::open_file(gb, &file),
         Command::History => crate::history::browser::open(gb),
         Command::Settings => crate::annotate::preferences::open(gb),
+        Command::Qa { action } => {
+            if !gb.quick_access.borrow().act(action) {
+                tracing::info!("no Quick Access card to act on");
+            }
+        }
         Command::Mcp { .. } | Command::Keybinds { .. } => {}
     }
 }

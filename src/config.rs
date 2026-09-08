@@ -121,6 +121,9 @@ pub struct QuickAccess {
     pub thumbnail_width: i32,
     /// Keep the editor open after dragging out of Quick Access.
     pub keep_editing_after_drag: bool,
+    /// While a card is visible, register Super+E / Super+D / Super+Delete with Hyprland
+    /// for the newest capture. Removed again as soon as the last card goes away.
+    pub global_shortcuts: bool,
 }
 
 impl Default for QuickAccess {
@@ -132,6 +135,7 @@ impl Default for QuickAccess {
             max_cards: 4,
             thumbnail_width: 240,
             keep_editing_after_drag: false,
+            global_shortcuts: true,
         }
     }
 }

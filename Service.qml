@@ -86,6 +86,12 @@ Item {
       return "ok"
     }
 
+    function qa(action: string): string {
+      if (root.checked && !root.installed) return "missing"
+      Util.execArgv([root.binary, "qa", action])
+      return "ok"
+    }
+
     function recheck(): void {
       root.checked = false
       probe.running = true

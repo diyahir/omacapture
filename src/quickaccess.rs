@@ -1,4 +1,11 @@
 //! Floating Quick Access panel shown after every capture.
+//!
+//! Keyboard: while the pointer is over a card the layer takes keyboard focus
+//! and plain keys act on that card (`c` copy, `e` edit, `o` open, `Delete`,
+//! `Escape`). While any card is visible the daemon also registers
+//! Super+E / Super+D / Super+Delete with Hyprland so the newest card can be
+//! handled without touching the mouse; those binds are removed the moment the
+//! last card goes away.
 
 use crate::app::Omashot;
 use crate::capture::Frame;
@@ -6,26 +13,69 @@ use crate::config::Corner;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum QaAction {
+    /// Copy the newest capture to the clipboard and dismiss its card.
+    Copy,
+    /// Open the newest capture in the editor.
+    Edit,
+    /// Open the newest capture with the default application.
+    Open,
+    /// Delete the newest capture's file and card.
+    Delete,
+    /// Dismiss the newest card.
+    Dismiss,
+}
+
+struct CardActions {
+    copy: Box<dyn Fn()>,
+    edit: Box<dyn Fn()>,
+    open: Box<dyn Fn()>,
+    delete: Box<dyn Fn()>,
+    dismiss: Box<dyn Fn()>,
+}
+
+impl CardActions {
+    fn run(&self, action: QaAction) {
+        match action {
+            QaAction::Copy => (self.copy)(),
+            QaAction::Edit => (self.edit)(),
+            QaAction::Open => (self.open)(),
+            QaAction::Delete => (self.delete)(),
+            QaAction::Dismiss => (self.dismiss)(),
+        }
+    }
+}
 
 struct Card {
     widget: gtk::Widget,
     picture: gtk::Picture,
     path: PathBuf,
     width: i32,
+    actions: Rc<CardActions>,
+    hovered: Rc<Cell<bool>>,
 }
 
 pub struct QuickAccessPanel {
     window: Option<gtk::Window>,
     stack: Option<gtk::Box>,
     cards: Vec<Card>,
+    global_binds_active: bool,
+}
+
+impl Default for QuickAccessPanel {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl QuickAccessPanel {
     pub fn new() -> Self {
-        Self { window: None, stack: None, cards: Vec::new() }
+        Self { window: None, stack: None, cards: Vec::new(), global_binds_active: false }
     }
 
     fn ensure_window(&mut self, gb: &Rc<Omashot>) -> gtk::Box {
@@ -38,6 +88,7 @@ impl QuickAccessPanel {
         window.init_layer_shell();
         window.set_layer(Layer::Overlay);
         window.set_namespace(Some("omashot-quickaccess"));
+        // Keyboard is taken only while a card is hovered (see build_card).
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_exclusive_zone(0);
         let (v, h) = match cfg.corner {
@@ -54,6 +105,30 @@ impl QuickAccessPanel {
         let stack = gtk::Box::new(gtk::Orientation::Vertical, 10);
         stack.set_valign(if matches!(v, Edge::Bottom) { gtk::Align::End } else { gtk::Align::Start });
         window.set_child(Some(&stack));
+
+        // One key controller for the surface: keys go to the hovered card, else the newest.
+        let keys = gtk::EventControllerKey::new();
+        let gb_keys = gb.clone();
+        keys.connect_key_pressed(move |_, key, _, _| {
+            let action = match key {
+                gdk::Key::c | gdk::Key::C => QaAction::Copy,
+                gdk::Key::e | gdk::Key::E => QaAction::Edit,
+                gdk::Key::o | gdk::Key::O => QaAction::Open,
+                gdk::Key::Delete | gdk::Key::BackSpace => QaAction::Delete,
+                gdk::Key::Escape | gdk::Key::q => QaAction::Dismiss,
+                _ => return glib::Propagation::Proceed,
+            };
+            let actions = {
+                let qa = gb_keys.quick_access.borrow();
+                qa.cards.iter().find(|c| c.hovered.get()).or_else(|| qa.cards.last()).map(|c| c.actions.clone())
+            };
+            if let Some(a) = actions {
+                a.run(action);
+            }
+            glib::Propagation::Stop
+        });
+        window.add_controller(keys);
+
         self.window = Some(window);
         self.stack = Some(stack.clone());
         stack
@@ -67,11 +142,15 @@ impl QuickAccessPanel {
             stack.remove(&old.widget);
         }
         let width = cfg.thumbnail_width.clamp(60, 2000);
-        let (card, picture) = build_card(gb, frame, path.clone(), is_saved, width, cfg.auto_dismiss_secs);
+        let hovered = Rc::new(Cell::new(false));
+        let (card, picture, actions) = build_card(gb, frame, path.clone(), is_saved, width, cfg.auto_dismiss_secs, hovered.clone());
         stack.append(&card);
-        self.cards.push(Card { widget: card.clone().upcast(), picture, path, width });
+        self.cards.push(Card { widget: card.clone().upcast(), picture, path, width, actions, hovered });
         if let Some(w) = &self.window {
             w.present();
+        }
+        if cfg.global_shortcuts && !self.global_binds_active {
+            self.global_binds_active = register_global_binds();
         }
     }
 
@@ -85,6 +164,19 @@ impl QuickAccessPanel {
         true
     }
 
+    /// Run an action on the newest card (hotkeys, `omashot qa <action>`, IPC).
+    pub fn act(&self, action: QaAction) -> bool {
+        match self.cards.last() {
+            Some(card) => {
+                let actions = card.actions.clone();
+                // Defer: the action may remove the card, which needs the panel borrow released.
+                glib::idle_add_local_once(move || actions.run(action));
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn remove(&mut self, card: &gtk::Widget) {
         if let Some(pos) = self.cards.iter().position(|c| &c.widget == card) {
             self.cards.remove(pos);
@@ -96,11 +188,66 @@ impl QuickAccessPanel {
         }
         if self.cards.is_empty() {
             if let Some(w) = self.window.take() {
-                w.close();
+                // Closing synchronously fires pointer-leave into handlers that
+                // borrow this panel, so let the caller's borrow end first.
+                glib::idle_add_local_once(move || w.close());
             }
             self.stack = None;
+            if self.global_binds_active {
+                unregister_global_binds();
+                self.global_binds_active = false;
+            }
         }
     }
+
+    fn set_keyboard(&self, exclusive: bool) {
+        if let Some(w) = &self.window {
+            w.set_keyboard_mode(if exclusive { KeyboardMode::Exclusive } else { KeyboardMode::None });
+        }
+    }
+}
+
+/// Super+E / Super+D / Super+Delete, alive only while a card is visible.
+/// Registered through Hyprland's Lua runtime so nothing is written to config.
+fn register_global_binds() -> bool {
+    if !crate::capture::hypr::is_hyprland() {
+        return false;
+    }
+    let exe = match std::env::current_exe() {
+        Ok(p) => p.to_string_lossy().to_string(),
+        Err(_) => return false,
+    };
+    let lua = format!(
+        r#"if omashot_qa_binds then for _, b in ipairs(omashot_qa_binds) do pcall(function() b:unbind() end) end end
+omashot_qa_binds = {{
+  hl.bind("SUPER + E", hl.dsp.exec_cmd("{exe} qa edit"), {{ description = "Omashot: edit last capture" }}),
+  hl.bind("SUPER + D", hl.dsp.exec_cmd("{exe} qa copy"), {{ description = "Omashot: copy and dismiss last capture" }}),
+  hl.bind("SUPER + DELETE", hl.dsp.exec_cmd("{exe} qa delete"), {{ description = "Omashot: delete last capture" }}),
+}}
+return "ok""#
+    );
+    let ok = std::process::Command::new("hyprctl")
+        .args(["eval", &lua])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !ok {
+        tracing::warn!("could not register Quick Access shortcuts with Hyprland");
+    }
+    ok
+}
+
+fn unregister_global_binds() {
+    let _ = std::process::Command::new("hyprctl")
+        .args([
+            "eval",
+            "if omashot_qa_binds then for _, b in ipairs(omashot_qa_binds) do pcall(function() b:unbind() end) end; omashot_qa_binds = nil end; return \"ok\"",
+        ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
 }
 
 /// Downscale for the card so the layer surface sizes to the thumbnail, not the capture.
@@ -118,7 +265,8 @@ fn build_card(
     is_saved: bool,
     width: i32,
     auto_dismiss_secs: u32,
-) -> (gtk::Box, gtk::Picture) {
+    hovered: Rc<Cell<bool>>,
+) -> (gtk::Box, gtk::Picture, Rc<CardActions>) {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
     card.add_css_class("qa-card");
     card.set_overflow(gtk::Overflow::Hidden);
@@ -166,6 +314,14 @@ fn build_card(
     close.set_margin_top(6);
     close.set_margin_start(6);
     overlay.add_overlay(&close);
+
+    let hint = gtk::Label::new(Some("hover: c e o ⌫ · Super+E edit · Super+D done"));
+    hint.add_css_class("qa-hint");
+    hint.set_halign(gtk::Align::End);
+    hint.set_valign(gtk::Align::Start);
+    hint.set_margin_top(6);
+    hint.set_margin_end(6);
+    overlay.add_overlay(&hint);
     card.append(&overlay);
 
     let bar = gtk::Box::new(gtk::Orientation::Horizontal, 2);
@@ -182,114 +338,121 @@ fn build_card(
         b.set_tooltip_text(Some(tip));
         b
     };
-    let copy = mk("edit-copy-symbolic", "Copy", "Copy to clipboard (C)");
-    let edit = mk("document-edit-symbolic", "Edit", "Annotate (E)");
-    let openb = mk("folder-open-symbolic", "Open", "Open with default app (O)");
-    let del = mk("user-trash-symbolic", "Delete", "Delete (Del)");
+    let copy = mk("edit-copy-symbolic", "Copy", "Copy to clipboard and dismiss (c, Super+D)");
+    let edit = mk("document-edit-symbolic", "Edit", "Annotate (e, Super+E)");
+    let openb = mk("folder-open-symbolic", "Open", "Open with default app (o)");
+    let del = mk("user-trash-symbolic", "Delete", "Delete (Delete, Super+Delete)");
     for b in [&copy, &edit, &openb, &del] {
         bar.append(b);
     }
     card.append(&bar);
 
-    let dismiss = {
+    let dismiss: Rc<dyn Fn()> = {
         let gb = gb.clone();
         let card = card.clone();
         Rc::new(move || gb.quick_access.borrow_mut().remove(card.upcast_ref()))
     };
-
+    let actions = Rc::new(CardActions {
+        copy: {
+            let frame = frame.clone();
+            let d = dismiss.clone();
+            Box::new(move || {
+                if let Ok(bytes) = crate::export::encode_png(&frame.image) {
+                    let _ = crate::clipboard::copy_png(&bytes);
+                }
+                d();
+            })
+        },
+        edit: {
+            let gb = gb.clone();
+            let frame = frame.clone();
+            let saved = if is_saved { Some(path.clone()) } else { None };
+            let d = dismiss.clone();
+            Box::new(move || {
+                crate::annotate::open(&gb, frame.clone(), saved.clone());
+                d();
+            })
+        },
+        open: {
+            let path = path.clone();
+            let d = dismiss.clone();
+            Box::new(move || {
+                let _ = std::process::Command::new("xdg-open").arg(&path).spawn();
+                d();
+            })
+        },
+        delete: {
+            let gb = gb.clone();
+            let path = path.clone();
+            let d = dismiss.clone();
+            Box::new(move || {
+                let _ = std::fs::remove_file(&path);
+                let _ = gb.history.borrow().delete_by_path(&path);
+                crate::annotate::session::delete(&path);
+                d();
+            })
+        },
+        dismiss: {
+            let d = dismiss.clone();
+            Box::new(move || d())
+        },
+    });
     {
-        let frame = frame.clone();
-        let d = dismiss.clone();
-        copy.connect_clicked(move |_| {
-            if let Ok(bytes) = crate::export::encode_png(&frame.image) {
-                let _ = crate::clipboard::copy_png(&bytes);
+        let a = actions.clone();
+        copy.connect_clicked(move |_| (a.copy)());
+        let a = actions.clone();
+        edit.connect_clicked(move |_| (a.edit)());
+        let a = actions.clone();
+        openb.connect_clicked(move |_| (a.open)());
+        let a = actions.clone();
+        del.connect_clicked(move |_| (a.delete)());
+        let a = actions.clone();
+        close.connect_clicked(move |_| (a.dismiss)());
+    }
+
+    // Hover: take the keyboard so plain keys reach the card; pause auto-dismiss.
+    let motion = gtk::EventControllerMotion::new();
+    {
+        let h = hovered.clone();
+        let gb_enter = gb.clone();
+        let card = card.clone();
+        motion.connect_enter(move |_, _, _| {
+            h.set(true);
+            if let Ok(qa) = gb_enter.quick_access.try_borrow() {
+                qa.set_keyboard(true);
             }
-            d();
+            card.grab_focus();
         });
-    }
-    {
+        let h = hovered.clone();
         let gb = gb.clone();
-        let frame = frame.clone();
-        let saved = if is_saved { Some(path.clone()) } else { None };
-        let d = dismiss.clone();
-        edit.connect_clicked(move |_| {
-            crate::annotate::open(&gb, frame.clone(), saved.clone());
-            d();
+        motion.connect_leave(move |_| {
+            h.set(false);
+            if let Ok(qa) = gb.quick_access.try_borrow() {
+                qa.set_keyboard(false);
+            }
         });
     }
-    {
-        let path = path.clone();
-        let d = dismiss.clone();
-        openb.connect_clicked(move |_| {
-            let _ = std::process::Command::new("xdg-open").arg(&path).spawn();
-            d();
-        });
-    }
-    {
-        let gb = gb.clone();
-        let path = path.clone();
-        let d = dismiss.clone();
-        del.connect_clicked(move |_| {
-            let _ = std::fs::remove_file(&path);
-            let _ = gb.history.borrow().delete_by_path(&path);
-            d();
-        });
-    }
-    {
-        let d = dismiss.clone();
-        close.connect_clicked(move |_| d());
-    }
+    card.add_controller(motion);
+    card.set_focusable(true);
 
-    // Auto-dismiss, paused while hovered.
     if auto_dismiss_secs > 0 {
-        let hovered = Rc::new(RefCell::new(false));
-        let motion = gtk::EventControllerMotion::new();
-        {
-            let h = hovered.clone();
-            motion.connect_enter(move |_, _, _| *h.borrow_mut() = true);
-        }
-        {
-            let h = hovered.clone();
-            motion.connect_leave(move |_| *h.borrow_mut() = false);
-        }
-        card.add_controller(motion);
         let remaining = Rc::new(RefCell::new(auto_dismiss_secs as i64 * 10));
-        let d = dismiss.clone();
+        let a = actions.clone();
         let card_weak = card.downgrade();
+        let h = hovered.clone();
         glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
             if card_weak.upgrade().map(|c| c.parent().is_none()).unwrap_or(true) {
                 return glib::ControlFlow::Break;
             }
-            if !*hovered.borrow() {
+            if !h.get() {
                 *remaining.borrow_mut() -= 1;
             }
             if *remaining.borrow() <= 0 {
-                d();
+                (a.dismiss)();
                 return glib::ControlFlow::Break;
             }
             glib::ControlFlow::Continue
         });
     }
-
-    // Hover keyboard shortcuts: c / e / o / Delete.
-    let keys = gtk::EventControllerKey::new();
-    {
-        let copy = copy.clone();
-        let edit = edit.clone();
-        let openb = openb.clone();
-        let del = del.clone();
-        keys.connect_key_pressed(move |_, key, _, _| {
-            match key {
-                gdk::Key::c => copy.emit_clicked(),
-                gdk::Key::e => edit.emit_clicked(),
-                gdk::Key::o => openb.emit_clicked(),
-                gdk::Key::Delete | gdk::Key::BackSpace => del.emit_clicked(),
-                gdk::Key::Escape => close.emit_clicked(),
-                _ => return glib::Propagation::Proceed,
-            }
-            glib::Propagation::Stop
-        });
-    }
-    card.add_controller(keys);
-    (card, picture)
+    (card, picture, actions)
 }
