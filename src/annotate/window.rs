@@ -1050,6 +1050,29 @@ impl EditorWindow {
             return;
         }
         let sb = &self.sidebar;
+        // Wallpaper and blurred backgrounds keep their other settings when only the
+        // blur strength changes; the picker re-applies the full preset.
+        let current = self.canvas.state.borrow().doc.sheet.canvas.background.clone();
+        let strength = sb.blur_strength.value();
+        match (sb.bg_kind.selected(), &current) {
+            (1, Background::Wallpaper { .. }) => {
+                self.canvas.update_canvas("blur", move |c| {
+                    if let Background::Wallpaper { strength: s, .. } = &mut c.background {
+                        *s = strength;
+                    }
+                });
+                return;
+            }
+            (4, Background::Blurred { .. }) => {
+                self.canvas.update_canvas("blur", move |c| {
+                    if let Background::Blurred { strength: s, .. } = &mut c.background {
+                        *s = strength;
+                    }
+                });
+                return;
+            }
+            _ => {}
+        }
         let bg = match sb.bg_kind.selected() {
             0 => Background::None,
             1 => {
@@ -1257,6 +1280,9 @@ impl EditorWindow {
         self.sidebar.padding.set_value(c.padding);
         self.sidebar.radius.set_value(c.corner_radius);
         self.sidebar.shadow.set_value(c.shadow);
+        if let Background::Wallpaper { strength, .. } | Background::Blurred { strength, .. } = &c.background {
+            self.sidebar.blur_strength.set_value(*strength);
+        }
         drop(s);
         self.updating.set(false);
     }

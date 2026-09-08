@@ -433,12 +433,12 @@ impl Canvas {
     /// blurred, at its own aspect ratio, with the capture floating on top.
     pub fn omarchy_frame(capture_w: f64, capture_h: f64) -> Canvas {
         let aspect = crate::theme::wallpaper_size().map(|(w, h)| (w as f64, h as f64)).unwrap_or((16.0, 9.0));
-        // Enough padding that the wallpaper reads as a backdrop, not a border.
-        let padding = (capture_w.max(capture_h) * 0.12).clamp(64.0, 320.0);
+        // Padding relative to the capture so small and large shots frame alike.
+        let padding = (capture_w.max(capture_h) * 0.05).clamp(16.0, 320.0);
         Canvas {
             background: Background::Wallpaper { strength: 3.0, dim: 0.12 },
             padding,
-            corner_radius: 12.0,
+            corner_radius: 0.0,
             shadow: 0.55,
             aspect: Some(aspect),
         }

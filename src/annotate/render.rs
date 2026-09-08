@@ -250,15 +250,32 @@ impl Renderer {
     }
 }
 
-fn draw_shadow(cr: &cairo::Context, x: f64, y: f64, w: f64, h: f64, radius: f64, intensity: f64) {
-    let steps = 12;
+/// Drop shadow cast down and to the right, like a lit sheet: the shadow only
+/// appears past the bottom and right edges, with a soft falloff.
+pub fn draw_shadow(cr: &cairo::Context, x: f64, y: f64, w: f64, h: f64, radius: f64, intensity: f64) {
+    let steps = 14;
+    let offset = 10.0 + 22.0 * intensity;
+    cr.save().ok();
+    // Never darken the image area itself or the top/left sides.
+    cr.set_fill_rule(cairo::FillRule::EvenOdd);
+    cr.rectangle(x - 1.0, y - 1.0, w + offset + 40.0, h + offset + 40.0);
+    rounded_rect(cr, x, y, w, h, radius);
+    cr.clip();
     for i in 0..steps {
         let t = i as f64 / steps as f64;
-        let spread = 18.0 * (1.0 - t);
-        cr.set_source_rgba(0.0, 0.0, 0.0, intensity * 0.08);
-        rounded_rect(cr, x - spread, y - spread + 8.0, w + spread * 2.0, h + spread * 2.0, radius + spread);
+        let spread = offset * (1.0 - t);
+        cr.set_source_rgba(0.0, 0.0, 0.0, intensity * 0.09);
+        rounded_rect(
+            cr,
+            x + offset * 0.55 - spread * 0.35,
+            y + offset * 0.55 - spread * 0.35,
+            w + spread * 0.7,
+            h + spread * 0.7,
+            radius + spread * 0.5,
+        );
         cr.fill().ok();
     }
+    cr.restore().ok();
 }
 
 pub fn set_color(cr: &cairo::Context, c: &Color) {
