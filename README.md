@@ -13,6 +13,7 @@ Screenshot capture and annotation for [Omarchy](https://omarchy.org). A bar widg
 - **Quick Access**: a floating card after every capture with copy, edit, drag-to-app, open, and delete.
 - **History** browser, **OCR** to clipboard, and a Preferences window backed by `~/.config/omashot/config.toml`.
 - **MCP server** for agents: `omashot mcp`.
+- **Follows your Omarchy theme**: colors from the active theme's `colors.toml`, square corners like the shell, the system monospace font, and a swatch palette built from the theme's accent colors. Theme switches apply live.
 
 ## Install
 
@@ -102,7 +103,11 @@ Widget settings live in `~/.config/omarchy/shell.json` under the bar layout entr
 | `capture_interactive` | Ask the human to pick a region or window; blocks until they finish |
 | `ocr` | Text or word boxes from a file or screen area |
 | `annotate` | Draw rectangles, arrows, labels, callouts, blur, highlights, counters, spotlight, watermark, or pencil paths onto an image, with optional crop and canvas background |
+| `redact` | OCR the image and pixelate emails, phones, URLs, card numbers, tokens, and credentials, plus any extra regex you pass |
+| `describe_annotations` | Field reference for every annotation type |
 | `history_list`, `read_image`, `open_editor` | Browse recent captures, look at a file, or hand an image to the human in the editor |
+
+`annotate` and `redact` accept `open_in_editor: true`, which saves an editable session and opens the result so the human can keep adjusting every item the agent placed.
 
 ## Remove
 
@@ -124,6 +129,7 @@ BSD-3-Clause. See `LICENSE`. Rust crate licenses are listed by `cargo license`.
 ```sh
 cargo build --release && install -Dm755 target/release/omashot ~/.local/bin/omashot
 cargo test                                    # model, redaction, and editor gesture tests
+cargo build --release --manifest-path tools/wlptr/Cargo.toml   # virtual pointer for live gesture tests (see tools/wlptr)
 omarchy plugin validate .                     # manifest check
 omarchy-shell shell rescanPlugins             # hot-reload QML after edits
 ```

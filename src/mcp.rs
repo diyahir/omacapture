@@ -140,16 +140,57 @@ fn tool_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "annotate",
-            "description": "Draw annotations onto an image and write the result. Coordinates are image pixels. Item types: rect, filled_rect, oval, line, arrow, text, highlight, blur, spotlight, counter, watermark, pencil. Each item takes x/y/width/height (or x1/y1/x2/y2 for line/arrow, points for pencil/highlight), plus optional color (hex), width, font_size, text, effect (pixelate|gaussian|...), strength, number, corner_radius. Optional crop {x,y,width,height}, background (gradient name, hex color, or 'blurred'), padding, corner_radius, shadow.",
+            "description": "Draw annotations onto an image and write the result. Every editor tool is available: rect, filled_rect, oval, line, arrow, text, label, callout, highlight, blur, spotlight, counter, watermark, pencil, plus crop and canvas backgrounds. Coordinates are source-image pixels (see read_image or a capture result for the size). Call describe_annotations for the full per-type field reference. With open_in_editor=true the result is also saved as an editable session and opened for the human, who can keep editing every item.",
             "inputSchema": {"type":"object","required":["path","items"],"properties":{
                 "path":{"type":"string","description":"Source image"},
-                "output":{"type":"string","description":"Destination path; defaults to a new file next to the source"},
-                "items":{"type":"array","items":{"type":"object"}},
-                "crop":{"type":"object"},
-                "background":{"type":"string"},
+                "output":{"type":"string","description":"Destination path; defaults to <source>-annotated.<ext>"},
+                "items":{"type":"array","description":"Annotation items, drawn in order (blur always renders under markup)","items":{"type":"object","required":["type"],"properties":{
+                    "type":{"type":"string","enum":["rect","filled_rect","oval","line","arrow","text","label","callout","highlight","blur","spotlight","counter","watermark","pencil"]},
+                    "x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"},
+                    "x1":{"type":"number"},"y1":{"type":"number"},"x2":{"type":"number"},"y2":{"type":"number"},
+                    "points":{"type":"array","description":"[[x,y],...] for pencil and freehand highlight","items":{"type":"array","items":{"type":"number"}}},
+                    "text":{"type":"string"},
+                    "color":{"type":"string","description":"Hex color like #ea6962; defaults to the theme red"},
+                    "stroke_width":{"type":"number","description":"Line thickness (1-20)"},
+                    "line_style":{"type":"string","enum":["solid","dashed","dotted"]},
+                    "corner_radius":{"type":"number"},
+                    "font_size":{"type":"number"},
+                    "opacity":{"type":"number"},"rotation":{"type":"number"},
+                    "style":{"type":"string","description":"arrow: straight|curved_right|curved_left; watermark: single|diagonal|tiled"},
+                    "kind":{"type":"string","enum":["classic","tapered","outlined"],"description":"arrow body"},
+                    "head_start":{"type":"string","enum":["none","arrow","circle"]},
+                    "head_end":{"type":"string","enum":["none","arrow","circle"]},
+                    "presentation":{"type":"string","enum":["plain","label","callout"]},
+                    "tail_x":{"type":"number"},"tail_y":{"type":"number"},
+                    "effect":{"type":"string","enum":["pixelate","gaussian","hexagonal","crystallize","pointillism","halftone","tape","washi"]},
+                    "strength":{"type":"number","description":"Blur strength 1-20"},
+                    "dim":{"type":"number","description":"Spotlight dim 0.1-0.9 (global)"},
+                    "number":{"type":"integer"},"size":{"type":"number","description":"Counter size 1-12"}
+                }}},
+                "crop":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"}}},
+                "background":{"type":"string","description":"Gradient preset name (pink orange, blue purple, green blue, orange red, purple pink, blue green, yellow orange, cyan blue), a hex color, 'blurred', or 'none'"},
                 "padding":{"type":"number"},
-                "corner_radius":{"type":"number"},
-                "shadow":{"type":"number"},
+                "corner_radius":{"type":"number","description":"Rounded corners of the image inside the canvas"},
+                "shadow":{"type":"number","description":"0-1"},
+                "open_in_editor":{"type":"boolean","description":"Save an editable session and open the result in the editor for the human","default":false},
+                "max_width":{"type":"integer","default":1280},
+                "return_image":{"type":"boolean","default":true}}}
+        }),
+        json!({
+            "name": "describe_annotations",
+            "description": "Reference for the annotate tool: every item type with its required and optional fields, defaults, and an example.",
+            "inputSchema": {"type":"object","properties":{}}
+        }),
+        json!({
+            "name": "redact",
+            "description": "Find sensitive text in an image with local OCR (emails, phone numbers, URLs, card numbers, API tokens, key=value credentials) and pixelate it. Returns the redacted image and the list of regions.",
+            "inputSchema": {"type":"object","required":["path"],"properties":{
+                "path":{"type":"string"},
+                "output":{"type":"string"},
+                "effect":{"type":"string","enum":["pixelate","gaussian","crystallize","halftone","tape","washi"],"default":"pixelate"},
+                "strength":{"type":"number","default":8},
+                "extra_patterns":{"type":"array","description":"Additional regular expressions; any matching word is redacted too","items":{"type":"string"}},
+                "open_in_editor":{"type":"boolean","default":false},
                 "max_width":{"type":"integer","default":1280},
                 "return_image":{"type":"boolean","default":true}}}
         }),
@@ -341,6 +382,8 @@ fn call_tool(name: &str, args: &Value) -> Result<Vec<Value>> {
             }
         }
         "annotate" => annotate_tool(args),
+        "describe_annotations" => Ok(vec![text(ANNOTATION_REFERENCE)]),
+        "redact" => redact_tool(args),
         "history_list" => {
             let h = crate::history::History::open()?;
             let entries = h.list(str_arg(args, "search").unwrap_or(""), int_arg(args, "limit").unwrap_or(20).clamp(1, 500) as u32)?;
@@ -590,6 +633,12 @@ fn annotate_tool(args: &Value) -> Result<Vec<Value>> {
     if let Some(s) = f_arg(args, "shadow") {
         doc.sheet.canvas.shadow = s;
     }
+    finish_document(args, &path, doc, items.len())
+}
+
+/// Render a document, write it, optionally persist an editable session and open the editor.
+fn finish_document(args: &Value, path: &std::path::Path, doc: Document, item_count: usize) -> Result<Vec<Value>> {
+    let cfg = crate::config::Config::load();
     let mut renderer = Renderer::new(&doc.source);
     let out = renderer.render_export(&doc);
     let output = match str_arg(args, "output") {
@@ -608,12 +657,124 @@ fn annotate_tool(args: &Value) -> Result<Vec<Value>> {
         }
     };
     crate::export::save_to(&out, &output, cfg.general.quality)?;
-    let mut content = vec![text(serde_json::to_string_pretty(&json!({"path": output, "width": out.width(), "height": out.height(), "items": items.len()}))?)];
+    if cfg.history.enabled {
+        if let Ok(h) = crate::history::History::open() {
+            let _ = h.insert(&output, out.width(), out.height(), None);
+        }
+    }
+    let editable = bool_arg(args, "open_in_editor", false);
+    let mut session_path = None;
+    if editable {
+        // Persist the original pixels + items so the editor reopens everything as live objects.
+        match crate::annotate::session::save(&output, &doc.source, &doc.sheet) {
+            Ok(sp) => {
+                if let Ok(h) = crate::history::History::open() {
+                    let _ = h.set_session(&output, &sp);
+                }
+                session_path = Some(sp);
+            }
+            Err(e) => tracing::warn!("session save failed: {e}"),
+        }
+        let exe = std::env::current_exe()?;
+        std::process::Command::new(exe)
+            .arg("annotate")
+            .arg(&output)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()?;
+    }
+    let mut content = vec![text(serde_json::to_string_pretty(&json!({
+        "path": output, "width": out.width(), "height": out.height(), "items": item_count,
+        "editable_session": session_path, "opened_in_editor": editable
+    }))?)];
     if bool_arg(args, "return_image", true) {
         content.push(image_content(&out, int_arg(args, "max_width").unwrap_or(1280).max(0) as u32)?);
     }
     Ok(content)
 }
+
+fn redact_tool(args: &Value) -> Result<Vec<Value>> {
+    let path = std::path::PathBuf::from(str_arg(args, "path").ok_or_else(|| anyhow!("path required"))?);
+    let img = image::open(&path).with_context(|| format!("opening {}", path.display()))?.to_rgba8();
+    let cfg = crate::config::Config::load();
+    let png = crate::export::encode_png(&img)?;
+    let words = crate::ocr::words(&png, &cfg.ocr.languages)?;
+    let strength = f_arg(args, "strength").unwrap_or(8.0).clamp(1.0, 20.0);
+    let effect = match str_arg(args, "effect") {
+        Some("gaussian") => BlurEffect::Gaussian,
+        Some("crystallize") => BlurEffect::Crystallize,
+        Some("halftone") => BlurEffect::Halftone,
+        Some("tape") => BlurEffect::Tape,
+        Some("washi") => BlurEffect::Washi,
+        _ => BlurEffect::Pixelate,
+    };
+    let extra: Vec<regex::Regex> = args
+        .get("extra_patterns")
+        .and_then(|p| p.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str()).filter_map(|p| regex::Regex::new(p).ok()).collect())
+        .unwrap_or_default();
+    let mut doc = Document::new(Frame { image: img, scale: 1.0 });
+    let style = Style::default();
+    let mut regions = Vec::new();
+    let mut items = crate::annotate::redact::redaction_items(&words, &style, strength);
+    for w in &words {
+        if extra.iter().any(|r| r.is_match(&w.text)) {
+            let r = RectF::new(w.x as f64, w.y as f64, w.w as f64, w.h as f64).inflate(3.0);
+            items.push((Kind::Blur { rect: r, effect, strength }, style.clone()));
+        }
+    }
+    for (kind, st) in items {
+        if let Kind::Blur { rect, .. } = &kind {
+            regions.push(json!({"x": rect.x, "y": rect.y, "width": rect.w, "height": rect.h}));
+        }
+        let kind = match kind {
+            Kind::Blur { rect, strength, .. } => Kind::Blur { rect, effect, strength },
+            k => k,
+        };
+        doc.add(kind, st);
+    }
+    let count = regions.len();
+    let mut content = finish_document(args, &path, doc, count)?;
+    content.insert(1, text(serde_json::to_string_pretty(&json!({"redacted_regions": regions}))?));
+    Ok(content)
+}
+
+const ANNOTATION_REFERENCE: &str = r##"Omashot annotation items (coordinates in source-image pixels, origin top-left).
+
+Common optional fields on every item: color (hex, default theme red), stroke_width (1-20, default 3),
+line_style (solid|dashed|dotted), corner_radius, font_size (default 16), opacity, rotation (degrees).
+
+rect          x, y, width, height            outline rectangle; corner_radius rounds it
+filled_rect   x, y, width, height            rectangle with a translucent fill of the same color
+oval          x, y, width, height            ellipse inside the box
+line          x1, y1, x2, y2
+arrow         x1, y1, x2, y2                 style: straight|curved_right|curved_left; kind: classic|tapered|outlined;
+                                             head_start / head_end: none|arrow|circle (default none / arrow)
+text          x, y, text                     plain text with a legibility outline
+label         x, y, text                     text on a filled box (corner_radius applies)
+callout       x, y, text, tail_x, tail_y     label with a pointer tail to (tail_x, tail_y)
+highlight     x, y, width, height            translucent bar across a line of text (or points: [[x,y],...] freehand)
+blur          x, y, width, height            effect: pixelate|gaussian|hexagonal|crystallize|pointillism|halftone|tape|washi; strength 1-20
+spotlight     x, y, width, height            everything outside all spotlights is dimmed; dim 0.1-0.9
+counter       x, y                           numbered circle; number (auto-increments), size 1-12
+watermark     text, [x, y, width, height]    style: single|diagonal|tiled; opacity default 0.35; whole image when no box
+pencil        points: [[x,y],...]            freehand stroke
+
+Document-level options: crop {x,y,width,height}; background (gradient preset name, hex color, 'blurred', 'none');
+padding (px, default 48 when a background is set); corner_radius (image corners); shadow 0-1; open_in_editor.
+
+Example:
+{"path":"shot.png","background":"blue purple","items":[
+  {"type":"rect","x":40,"y":40,"width":300,"height":120,"color":"#ea6962"},
+  {"type":"arrow","x1":400,"y1":300,"x2":330,"y2":150,"kind":"tapered","color":"#a9b665"},
+  {"type":"callout","x":420,"y":310,"text":"Look here","tail_x":360,"tail_y":200,"font_size":24},
+  {"type":"blur","x":500,"y":50,"width":250,"height":100,"effect":"pixelate","strength":8},
+  {"type":"counter","x":100,"y":250},{"type":"counter","x":150,"y":250},
+  {"type":"highlight","x":40,"y":200,"width":200,"height":24},
+  {"type":"spotlight","x":250,"y":200,"width":120,"height":80,"dim":0.4},
+  {"type":"watermark","text":"DRAFT","style":"tiled"}]}"##;
+
 
 trait ColorDefault {
     fn unwrap_or_default_color(self) -> Color;

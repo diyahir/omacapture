@@ -122,6 +122,12 @@ impl EditorWindow {
         };
         let mut style = Style::default();
         style.color = Color::parse(&cfg.annotate.stroke_color).unwrap_or(style.color);
+        // With the stock default, follow the Omarchy theme's red instead.
+        if cfg.annotate.stroke_color == "#ff3b30" {
+            if let Some(c) = crate::theme::current().and_then(|t| Color::parse(&t.red)) {
+                style.color = c;
+            }
+        }
         style.width = cfg.annotate.stroke_width;
         style.font_family = cfg.annotate.font_family.clone();
         style.font_size = cfg.annotate.font_size;
@@ -141,6 +147,7 @@ impl EditorWindow {
             .default_height(800)
             .title(&Self::title_for(source.as_deref()))
             .build();
+        win.add_css_class("omashot-window");
 
         let toast = adw::ToastOverlay::new();
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -408,12 +415,14 @@ impl EditorWindow {
         bar.set_margin_end(8);
 
         let palette = gtk::Box::new(gtk::Orientation::Horizontal, 2);
-        for hex in PALETTE {
+        let swatches: Vec<String> = crate::theme::current().map(|t| t.palette()).unwrap_or_else(|| PALETTE.iter().map(|s| s.to_string()).collect());
+        for hex in swatches {
+            let hex = hex.as_str();
             let b = gtk::Button::new();
             b.add_css_class("swatch");
             b.add_css_class("flat");
             let css = gtk::CssProvider::new();
-            css.load_from_string(&format!(".swatch {{ background: {hex}; min-width: 14px; min-height: 14px; border-radius: 50%; padding: 2px; margin: 2px; border: 1px solid rgba(0,0,0,0.25); }}"));
+            css.load_from_string(&format!(".swatch {{ background: {hex}; min-width: 14px; min-height: 14px; border-radius: 0; padding: 2px; margin: 2px; border: 1px solid rgba(0,0,0,0.35); }} .swatch:hover {{ border-color: @window_fg_color; }}"));
             b.style_context().add_provider(&css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
             b.set_tooltip_text(Some(hex));
             b.set_valign(gtk::Align::Center);
@@ -851,7 +860,7 @@ impl EditorWindow {
             btn.set_size_request(44, 30);
             btn.set_tooltip_text(Some(name));
             let css = gtk::CssProvider::new();
-            css.load_from_string(&format!("button {{ background: linear-gradient(135deg, {a}, {b}); border-radius: 6px; }}"));
+            css.load_from_string(&format!("button {{ background: linear-gradient(135deg, {a}, {b}); border-radius: 0; }}"));
             btn.style_context().add_provider(&css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
             flow.insert(&btn, -1);
         }

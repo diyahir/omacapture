@@ -1,3 +1,4 @@
+#![recursion_limit = "512"]
 mod app;
 mod capture;
 mod clipboard;
@@ -11,6 +12,7 @@ mod postcapture;
 mod quickaccess;
 mod annotate;
 mod mcp;
+mod theme;
 
 use clap::{Parser, Subcommand};
 

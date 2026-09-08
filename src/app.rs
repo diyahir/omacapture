@@ -40,7 +40,7 @@ pub fn run() -> glib::ExitCode {
     let app = adw::Application::new(Some(crate::paths::APP_ID), flags);
 
     app.connect_startup(|app| {
-        load_css();
+        crate::theme::install();
         let config = Config::load();
         let history = History::open().expect("history db");
         let _ = history.prune(config.history.retention_days, config.history.max_entries);
@@ -77,13 +77,6 @@ pub fn run() -> glib::ExitCode {
     app.run()
 }
 
-fn load_css() {
-    let css = gtk::CssProvider::new();
-    css.load_from_string(include_str!("style.css"));
-    if let Some(display) = gtk::gdk::Display::default() {
-        gtk::style_context_add_provider_for_display(&display, &css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
-    }
-}
 
 pub fn dispatch(gb: &Rc<Omashot>, cmd: Command) {
     tracing::debug!("dispatch {cmd:?}");

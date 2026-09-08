@@ -304,8 +304,10 @@ impl Canvas {
         area.set_vexpand(true);
         area.set_focusable(true);
         area.add_css_class("annotate-canvas");
+        // The text-editing layer must not eat pointer events when no editor is open,
+        // otherwise every drag on the canvas is swallowed before it reaches the gestures.
         let fixed = gtk::Fixed::new();
-        fixed.set_can_target(true);
+        fixed.set_can_target(false);
         let widget = gtk::Overlay::new();
         widget.set_child(Some(&area));
         widget.add_overlay(&fixed);
@@ -420,10 +422,11 @@ impl Canvas {
             if let Drag::Marquee { start, current } = &s.drag {
                 let a = s.to_screen(*start);
                 let b = s.to_screen(*current);
-                cr.set_source_rgba(0.3, 0.6, 1.0, 0.15);
+                let (ar, ag, ab) = crate::theme::accent_rgb();
+                cr.set_source_rgba(ar, ag, ab, 0.15);
                 cr.rectangle(a.0.min(b.0), a.1.min(b.1), (a.0 - b.0).abs(), (a.1 - b.1).abs());
                 cr.fill_preserve().ok();
-                cr.set_source_rgba(0.3, 0.6, 1.0, 0.9);
+                cr.set_source_rgba(ar, ag, ab, 0.9);
                 cr.set_line_width(1.0);
                 cr.stroke().ok();
             }
@@ -942,6 +945,7 @@ impl Canvas {
         ));
         view.style_context().add_provider(&css, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
         view.set_size_request(20, -1);
+        self.fixed.set_can_target(true);
         self.fixed.put(&view, pos.0, pos.1);
         self.state.borrow_mut().text_edit = Some(TextEdit { id, view: view.clone() });
 
@@ -999,6 +1003,7 @@ impl Canvas {
             b.text(&b.start_iter(), &b.end_iter(), true).to_string()
         };
         self.fixed.remove(&edit.view);
+        self.fixed.set_can_target(false);
         let mut s = self.state.borrow_mut();
         if text.trim().is_empty() {
             s.doc.remove(edit.id);
@@ -1516,11 +1521,12 @@ fn crop_handle_at(s: &EditorState, x: f64, y: f64) -> Option<usize> {
 }
 
 fn draw_handle(cr: &cairo::Context, x: f64, y: f64) {
-    cr.arc(x, y, HANDLE_PX / 2.0, 0.0, std::f64::consts::TAU);
-    cr.set_source_rgb(1.0, 1.0, 1.0);
+    let (ar, ag, ab) = crate::theme::accent_rgb();
+    cr.rectangle(x - HANDLE_PX / 2.0 + 0.5, y - HANDLE_PX / 2.0 + 0.5, HANDLE_PX - 1.0, HANDLE_PX - 1.0);
+    cr.set_source_rgb(0.08, 0.08, 0.08);
     cr.fill_preserve().ok();
-    cr.set_source_rgb(0.2, 0.5, 1.0);
-    cr.set_line_width(1.5);
+    cr.set_source_rgb(ar, ag, ab);
+    cr.set_line_width(1.0);
     cr.stroke().ok();
 }
 
@@ -1543,7 +1549,8 @@ fn draw_selection(cr: &cairo::Context, s: &EditorState) {
                 }
                 if let Some(c) = ctrl {
                     let (x, y) = s.to_screen(*c);
-                    cr.set_source_rgba(0.2, 0.5, 1.0, 0.6);
+                    let (ar, ag, ab) = crate::theme::accent_rgb();
+                    cr.set_source_rgba(ar, ag, ab, 0.6);
                     cr.set_dash(&[3.0, 3.0], 0.0);
                     let (ax, ay) = s.to_screen(*a);
                     let (bx, by) = s.to_screen(*b);
@@ -1560,7 +1567,8 @@ fn draw_selection(cr: &cairo::Context, s: &EditorState) {
                 let r = item_bounds(it);
                 let (x0, y0) = s.to_screen(Pt::new(r.x, r.y));
                 let (x1, y1) = s.to_screen(Pt::new(r.right(), r.bottom()));
-                cr.set_source_rgba(0.2, 0.5, 1.0, 0.9);
+                let (ar, ag, ab) = crate::theme::accent_rgb();
+                cr.set_source_rgba(ar, ag, ab, 0.9);
                 cr.set_line_width(1.0);
                 cr.set_dash(&[4.0, 3.0], 0.0);
                 cr.rectangle(x0 - 2.5, y0 - 2.5, x1 - x0 + 5.0, y1 - y0 + 5.0);
@@ -1617,8 +1625,8 @@ fn draw_crop_overlay(cr: &cairo::Context, s: &EditorState, c: &CropState, w: f64
     layout.set_text(&label);
     let (tw, th) = layout.pixel_size();
     let (bx, by) = (x0 + 6.0, (y1 + 8.0).min(h - th as f64 - 12.0));
-    render::rounded_rect(cr, bx, by, tw as f64 + 12.0, th as f64 + 8.0, 5.0);
-    cr.set_source_rgba(0.1, 0.1, 0.1, 0.85);
+    cr.rectangle(bx, by, tw as f64 + 12.0, th as f64 + 8.0);
+    cr.set_source_rgba(0.08, 0.08, 0.08, 0.9);
     cr.fill().ok();
     cr.set_source_rgb(1.0, 1.0, 1.0);
     cr.move_to(bx + 6.0, by + 4.0);

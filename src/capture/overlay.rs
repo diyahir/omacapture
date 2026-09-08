@@ -254,7 +254,8 @@ fn install_draw(area: &gtk::DrawingArea, state: &Rc<RefCell<State>>, idx: usize)
         }
 
         if let Some(r) = hover_local {
-            cr.set_source_rgba(0.35, 0.65, 1.0, 1.0);
+            let (ar, ag, ab) = crate::theme::accent_rgb();
+            cr.set_source_rgba(ar, ag, ab, 1.0);
             cr.set_line_width(2.0);
             cr.rectangle(r.x as f64 + 1.0, r.y as f64 + 1.0, r.w as f64 - 2.0, r.h as f64 - 2.0);
             cr.stroke().ok();
@@ -262,7 +263,8 @@ fn install_draw(area: &gtk::DrawingArea, state: &Rc<RefCell<State>>, idx: usize)
 
         if let Some(r) = sel_local {
             let (x, y, rw, rh) = (r.x as f64, r.y as f64, r.w as f64, r.h as f64);
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.95);
+            let (ar, ag, ab) = crate::theme::accent_rgb();
+            cr.set_source_rgba(ar, ag, ab, 1.0);
             cr.set_line_width(1.0);
             cr.rectangle(x + 0.5, y + 0.5, rw - 1.0, rh - 1.0);
             cr.stroke().ok();
@@ -272,7 +274,7 @@ fn install_draw(area: &gtk::DrawingArea, state: &Rc<RefCell<State>>, idx: usize)
                 (x, y + rh / 2.0), (x + rw, y + rh / 2.0),
                 (x, y + rh), (x + rw / 2.0, y + rh), (x + rw, y + rh),
             ] {
-                cr.arc(hx, hy, HANDLE / 2.0, 0.0, std::f64::consts::TAU);
+                cr.rectangle(hx - HANDLE / 2.0, hy - HANDLE / 2.0, HANDLE, HANDLE);
                 cr.fill().ok();
             }
             // Size readout.
@@ -328,9 +330,13 @@ fn draw_label(cr: &cairo::Context, text: &str, x: f64, y: f64, w: f64, h: f64) {
     let bh = th as f64 + pad * 2.0;
     let bx = x.clamp(4.0, (w - bw - 4.0).max(4.0));
     let by = if y + bh > h - 4.0 { (y - bh - 16.0).max(4.0) } else { y };
-    rounded_rect(cr, bx, by, bw, bh, 6.0);
-    cr.set_source_rgba(0.1, 0.1, 0.1, 0.85);
-    cr.fill().ok();
+    cr.rectangle(bx, by, bw, bh);
+    cr.set_source_rgba(0.08, 0.08, 0.08, 0.9);
+    cr.fill_preserve().ok();
+    let (ar, ag, ab) = crate::theme::accent_rgb();
+    cr.set_source_rgba(ar, ag, ab, 0.9);
+    cr.set_line_width(1.0);
+    cr.stroke().ok();
     cr.move_to(bx + pad, by + pad);
     cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
     pangocairo::functions::show_layout(cr, &layout);
@@ -359,7 +365,7 @@ fn draw_magnifier(cr: &cairo::Context, surface: &cairo::ImageSurface, scale: f64
         my = ly - 24.0 - SIZE;
     }
     cr.save().ok();
-    rounded_rect(cr, mx, my, SIZE, SIZE, 8.0);
+    cr.rectangle(mx, my, SIZE, SIZE);
     cr.clip();
     cr.set_source_rgb(0.1, 0.1, 0.1);
     cr.paint().ok();
@@ -378,8 +384,9 @@ fn draw_magnifier(cr: &cairo::Context, surface: &cairo::ImageSurface, scale: f64
     cr.set_line_width(1.0);
     cr.rectangle(mx + SIZE / 2.0 - ZOOM / 2.0, my + SIZE / 2.0 - ZOOM / 2.0, ZOOM, ZOOM);
     cr.stroke().ok();
-    cr.set_source_rgba(1.0, 1.0, 1.0, 0.9);
-    rounded_rect(cr, mx + 0.5, my + 0.5, SIZE - 1.0, SIZE - 1.0, 8.0);
+    let (ar, ag, ab) = crate::theme::accent_rgb();
+    cr.set_source_rgba(ar, ag, ab, 0.95);
+    cr.rectangle(mx + 0.5, my + 0.5, SIZE - 1.0, SIZE - 1.0);
     cr.stroke().ok();
 }
 

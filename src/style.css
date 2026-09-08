@@ -1,18 +1,56 @@
+/* Omarchy-style chrome: square corners, hairline borders, monospace type. */
+
+window, .omashot-window { font-family: monospace; }
+
+/* Kill rounding everywhere the shell has none. */
+button, .card, popover > contents, popover > arrow, entry, spinbutton, dropdown > button,
+.toast, tooltip, tooltip > *, scale trough, scale highlight, scale slider, switch, switch > slider,
+menubutton > button, .osd, textview, frame, frame > border, .frame, headerbar, window,
+.linked > *, check, radio, list, row, .boxed-list, .boxed-list row, dialog, .dialog, .alert,
+colorswatch, colorswatch > overlay, searchbar, .navigation-sidebar, preferencesgroup > box > box,
+.swatch, .qa-card, .qa-thumb, .qa-close, .qa-bar button, .tool-button, .history-thumb, .annotate-text-edit {
+  border-radius: 0;
+}
+
+headerbar { box-shadow: none; border-bottom: 1px solid @borders; padding: 2px 6px; min-height: 40px; }
+headerbar button { padding: 4px 8px; min-height: 26px; }
+
+.toolbar { padding: 4px 6px; border-bottom: 1px solid @borders; background: @window_bg_color; }
+.props-bar { min-height: 34px; }
+.props-bar label.caption { font-size: 0.85em; letter-spacing: 0.02em; text-transform: uppercase; }
+
+button { border: 1px solid transparent; }
+button:hover { border-color: alpha(@window_fg_color, 0.25); }
+button.flat:hover { background: alpha(@window_fg_color, 0.08); }
+button.suggested-action { border: 1px solid @accent_bg_color; }
+.tool-button { padding: 4px 7px; margin: 0 1px; min-width: 24px; }
+.tool-button:checked, .tool-button.active {
+  background: alpha(@accent_bg_color, 0.22);
+  border: 1px solid @accent_bg_color;
+  color: @window_fg_color;
+}
+
+spinbutton, entry, dropdown > button { border: 1px solid @borders; min-height: 26px; }
+spinbutton button { border: none; }
+
+.sidebar { border-left: 1px solid @borders; background: @window_bg_color; }
+.sidebar .heading { font-size: 0.85em; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.8; }
+
+.annotate-canvas { background: @view_bg_color; }
+.annotate-text-edit { border: 1px solid @accent_bg_color; }
+
 .omashot-overlay { background: transparent; }
 
 .omashot-quickaccess { background: transparent; }
 .qa-card {
-  background: alpha(@window_bg_color, 0.96);
-  border-radius: 12px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
-  border: 1px solid alpha(@borders, 0.6);
+  background: @window_bg_color;
+  border: 1px solid @borders;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
 }
-.qa-thumb { border-radius: 12px 12px 0 0; }
-.qa-bar { padding: 4px; }
-.qa-bar button { padding: 4px 6px; font-size: 0.85em; }
-.qa-close { background: rgba(0,0,0,0.55); color: white; min-width: 22px; min-height: 22px; padding: 0; }
-.qa-close:hover { background: rgba(0,0,0,0.8); }
+.qa-thumb { border-bottom: 1px solid @borders; }
+.qa-bar { padding: 2px; }
+.qa-bar button { padding: 4px 6px; font-size: 0.85em; border: none; }
+.qa-close { background: rgba(0,0,0,0.6); color: white; min-width: 20px; min-height: 20px; padding: 0; }
+.qa-close:hover { background: @accent_bg_color; color: @accent_fg_color; }
 
-.annotate-canvas { background: @view_bg_color; }
-.tool-button.active { background: alpha(@accent_bg_color, 0.35); }
-.history-thumb { border-radius: 6px; }
+.history-thumb { border: 1px solid @borders; }
