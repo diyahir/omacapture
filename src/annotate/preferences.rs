@@ -70,11 +70,61 @@ fn matrix_group(gb: &Rc<Omashot>, title: &str, get: fn(&crate::config::Config) -
 pub fn open(gb: &Rc<Omashot>) {
     let outer = gb.clone();
     let cfg = gb.config.get();
-    let win = adw::PreferencesWindow::new();
-    win.set_application(Some(&gb.app));
-    win.set_title(Some("Omashot Preferences"));
-    win.set_default_size(720, 640);
-    win.set_search_enabled(true);
+    // Categories in a side list, the selected page in the main panel.
+    let win = adw::ApplicationWindow::builder().application(&gb.app).title("Omashot Preferences").default_width(860).default_height(640).build();
+    win.add_css_class("omashot-window");
+    let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let header = adw::HeaderBar::new();
+    root.append(&header);
+    let body = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    body.set_vexpand(true);
+    let nav = gtk::ListBox::new();
+    nav.add_css_class("navigation-sidebar");
+    nav.add_css_class("prefs-nav");
+    nav.set_selection_mode(gtk::SelectionMode::Single);
+    nav.set_size_request(210, -1);
+    let nav_scroller = gtk::ScrolledWindow::new();
+    nav_scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+    nav_scroller.set_child(Some(&nav));
+    body.append(&nav_scroller);
+    body.append(&gtk::Separator::new(gtk::Orientation::Vertical));
+    let stack = gtk::Stack::new();
+    stack.set_hexpand(true);
+    stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+    body.append(&stack);
+    root.append(&body);
+    win.set_content(Some(&root));
+    {
+        let stack = stack.clone();
+        nav.connect_row_selected(move |_, row| {
+            if let Some(name) = row.and_then(|r| r.widget_name().to_string().into()) {
+                stack.set_visible_child_name(&name);
+            }
+        });
+    }
+    let add_page = |page: &adw::PreferencesPage| {
+        let name = page.title().to_string();
+        let scroller = gtk::ScrolledWindow::new();
+        scroller.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+        scroller.set_child(Some(page));
+        stack.add_titled(&scroller, Some(&name), &name);
+        let row = gtk::ListBoxRow::new();
+        row.set_widget_name(&name);
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        content.set_margin_top(8);
+        content.set_margin_bottom(8);
+        content.set_margin_start(6);
+        content.set_margin_end(6);
+        if let Some(icon) = page.icon_name() {
+            content.append(&gtk::Image::from_icon_name(&icon));
+        }
+        content.append(&gtk::Label::new(Some(&name)));
+        row.set_child(Some(&content));
+        nav.append(&row);
+        if nav.selected_row().is_none() {
+            nav.select_row(Some(&row));
+        }
+    };
 
     // ----- General -----
     let general = adw::PreferencesPage::new();
@@ -147,7 +197,7 @@ pub fn open(gb: &Rc<Omashot>) {
         g_capture.add(&spin_row("Capture delay (ms)", None, 0.0, 10_000.0, 100.0, cfg.general.delay_ms as f64, move |v| gb.config.update(|c| c.general.delay_ms = v as u32)));
     }
     general.add(&g_capture);
-    win.add(&general);
+    add_page(&general);
 
     // ----- After capture -----
     let post = adw::PreferencesPage::new();
@@ -157,7 +207,7 @@ pub fn open(gb: &Rc<Omashot>) {
     post.add(&matrix_group(gb, "Area", |c| c.post_capture.area, |c, a| c.post_capture.area = a));
     post.add(&matrix_group(gb, "Window", |c| c.post_capture.window, |c, a| c.post_capture.window = a));
     post.add(&matrix_group(gb, "Editor save", |c| c.post_capture.annotate_export, |c, a| c.post_capture.annotate_export = a));
-    win.add(&post);
+    add_page(&post);
 
     // ----- Quick Access -----
     let qa = adw::PreferencesPage::new();
@@ -192,7 +242,7 @@ pub fn open(gb: &Rc<Omashot>) {
         g_qa.add(&switch_row("Keep editing after drag", Some("Leave the editor open after dragging into another app"), cfg.quick_access.keep_editing_after_drag, move |v| gb.config.update(|c| c.quick_access.keep_editing_after_drag = v)));
     }
     qa.add(&g_qa);
-    win.add(&qa);
+    add_page(&qa);
 
     // ----- Annotate -----
     let ann = adw::PreferencesPage::new();
@@ -219,7 +269,7 @@ pub fn open(gb: &Rc<Omashot>) {
         g_ann.add(&entry_row("Watermark text", &cfg.annotate.watermark_text, move |v| gb.config.update(|c| c.annotate.watermark_text = v)));
     }
     ann.add(&g_ann);
-    win.add(&ann);
+    add_page(&ann);
 
     // ----- History & OCR -----
     let hist = adw::PreferencesPage::new();
@@ -245,7 +295,7 @@ pub fn open(gb: &Rc<Omashot>) {
         g_ocr.add(&switch_row("Copy recognized text to clipboard", None, cfg.ocr.copy_to_clipboard, move |v| gb.config.update(|c| c.ocr.copy_to_clipboard = v)));
     }
     hist.add(&g_ocr);
-    win.add(&hist);
+    add_page(&hist);
 
     // ----- Shortcuts -----
     let keys = adw::PreferencesPage::new();
@@ -297,7 +347,7 @@ pub fn open(gb: &Rc<Omashot>) {
         g_editor_keys.add(&row);
     }
     keys.add(&g_editor_keys);
-    win.add(&keys);
+    add_page(&keys);
 
     let _ = glib::MainContext::default();
     win.present();

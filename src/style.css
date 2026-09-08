@@ -34,9 +34,6 @@ spinbutton, entry, dropdown > button { border: 1px solid @borders; min-height: 2
 spinbutton button { border: none; }
 
 .sidebar { border-left: 1px solid @borders; background: @window_bg_color; }
-.inspector .heading { font-size: 0.9em; letter-spacing: 0.08em; text-transform: uppercase; }
-.inspector dropdown, .inspector spinbutton, .inspector entry, .inspector button { min-height: 28px; }
-.inspector scale { margin-top: 2px; }
 .sidebar .heading { font-size: 0.85em; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.8; }
 
 .annotate-canvas { background: @view_bg_color; }
@@ -57,3 +54,8 @@ spinbutton button { border: none; }
 .qa-close:hover { background: @accent_bg_color; color: @accent_fg_color; }
 
 .history-thumb { border: 1px solid @borders; }
+
+.prefs-nav { background: @window_bg_color; padding: 6px; }
+.prefs-nav row { border: 1px solid transparent; }
+.prefs-nav row:selected { background: alpha(@accent_bg_color, 0.22); border-color: @accent_bg_color; color: @window_fg_color; }
+.prefs-nav row:hover { background: alpha(@window_fg_color, 0.06); }
