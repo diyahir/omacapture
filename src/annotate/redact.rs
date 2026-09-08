@@ -27,7 +27,6 @@ pub fn is_sensitive(token: &str) -> bool {
     thread_local! {
         static PATTERNS: Vec<Regex> = vec![
             Regex::new(r"^[\w.+-]+@[\w-]+\.[\w.-]+$").unwrap(),                       // email
-            Regex::new(r"^\+?\d[\d\s().-]{8,}\d$").unwrap(),                            // phone
             Regex::new(r"^(https?://|www\.)\S+$").unwrap(),                             // url
             Regex::new(r"^(AKIA|ASIA)[A-Z0-9]{16}$").unwrap(),                          // aws key id
             Regex::new(r"^(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}$").unwrap(),           // github token
@@ -45,6 +44,13 @@ pub fn is_sensitive(token: &str) -> bool {
         return false;
     }
     let digits: String = t.chars().filter(|c| c.is_ascii_digit()).collect();
+    // Phone numbers: 10-15 digits with only phone punctuation, and not a plain date.
+    let phone_chars = t.chars().all(|c| c.is_ascii_digit() || " +()-.".contains(c));
+    let formatted = t.starts_with('+') || t.contains('(') || t.contains(' ') || t.contains('.');
+    let looks_like_date = t.matches('-').count() == 2 && digits.len() == 8;
+    if phone_chars && !looks_like_date && ((formatted && (10..=15).contains(&digits.len())) || (t.chars().all(|c| c.is_ascii_digit()) && (10..=11).contains(&digits.len()))) {
+        return true;
+    }
     if digits.len() >= 13 && t.chars().all(|c| c.is_ascii_digit() || c == ' ' || c == '-') && luhn(&digits) {
         return true;
     }
@@ -82,4 +88,31 @@ pub fn redaction_items(words: &[Word], style: &Style, strength: f64) -> Vec<(Kin
 
 fn blur_item(r: RectF, style: &Style, strength: f64) -> (Kind, Style) {
     (Kind::Blur { rect: r.inflate(3.0), effect: BlurEffect::Pixelate, strength }, style.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_secrets() {
+        assert!(is_sensitive("someone@example.com"));
+        assert!(is_sensitive("+1 (555) 123-4567"));
+        assert!(is_sensitive("AKIAIOSFODNN7EXAMPLE"));
+        assert!(is_sensitive("ghp_abcdefghijklmnopqrstuvwxyz0123456789"));
+        assert!(is_sensitive("4111111111111111"));
+        assert!(is_sensitive("password=hunter2"));
+        assert!(!is_sensitive("hello"));
+        assert!(!is_sensitive("2026-09-08"));
+        assert!(!is_sensitive("1234567890123"));
+    }
+
+    #[test]
+    fn groups_card_numbers() {
+        let w = |t: &str, x: i32| Word { text: t.into(), x, y: 10, w: 40, h: 12 };
+        let words = vec![w("Card", 0), w("4111", 50), w("1111", 100), w("1111", 150), w("1111", 200), w("ok", 260)];
+        let items = redaction_items(&words, &Style::default(), 6.0);
+        assert_eq!(items.len(), 1);
+        assert!(matches!(items[0].0, Kind::Blur { rect, .. } if rect.x == 47.0 && rect.w == 196.0));
+    }
 }

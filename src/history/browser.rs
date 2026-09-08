@@ -22,6 +22,8 @@ pub fn open(gb: &Rc<Grabbit>) {
 
     let flow = gtk::FlowBox::new();
     flow.set_selection_mode(gtk::SelectionMode::None);
+    flow.set_homogeneous(true);
+    flow.set_min_children_per_line(2);
     flow.set_max_children_per_line(6);
     flow.set_column_spacing(12);
     flow.set_row_spacing(12);
@@ -47,9 +49,15 @@ pub fn open(gb: &Rc<Grabbit>) {
             for e in entries {
                 let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
                 card.set_size_request(200, -1);
-                let pic = gtk::Picture::for_filename(&e.path);
+                card.set_hexpand(false);
+                // Decode at thumbnail size so a card never grows to the capture's native size.
+                let pic = match gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(&e.path, 400, 260, true) {
+                    Ok(pb) => gtk::Picture::for_paintable(&gtk::gdk::Texture::for_pixbuf(&pb)),
+                    Err(_) => gtk::Picture::new(),
+                };
                 pic.set_size_request(200, 130);
                 pic.set_content_fit(gtk::ContentFit::Cover);
+                pic.set_can_shrink(true);
                 pic.add_css_class("history-thumb");
                 let frame = gtk::Frame::new(None);
                 frame.set_child(Some(&pic));
@@ -116,7 +124,10 @@ pub fn open(gb: &Rc<Grabbit>) {
                     actions.append(b);
                 }
                 card.append(&actions);
-                flow.insert(&card, -1);
+                let child = gtk::FlowBoxChild::new();
+                child.set_child(Some(&card));
+                child.set_hexpand(false);
+                flow.insert(&child, -1);
             }
         })
     };

@@ -285,7 +285,7 @@ pub fn open(gb: &Rc<Grabbit>) {
     for (k, d) in [
         ("V C R F O A L T H B S N W P", "Select, Crop, Rectangle, Filled, Oval, Arrow, Line, Text, Highlighter, Blur, Spotlight, Counter, Watermark, Pencil"),
         ("Ctrl+Z / Ctrl+Shift+Z", "Undo / redo"),
-        ("Ctrl+S / Ctrl+Shift+C / Ctrl+E", "Save / copy & close / export as"),
+        ("Ctrl+S / Ctrl+Shift+C / Ctrl+E", "Save / copy and close / export as"),
         ("Ctrl+C, Ctrl+V, Ctrl+D, Ctrl+A", "Copy, paste, duplicate, select all annotations"),
         ("Ctrl+scroll, Ctrl+0, Ctrl+1", "Zoom, fit, actual size; hold Space to pan"),
         ("Enter / Esc / A (crop)", "Apply crop / cancel / auto-crop to content"),

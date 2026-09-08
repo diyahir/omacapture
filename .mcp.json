@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "grabbit": {
+      "command": "grabbit",
+      "args": ["mcp"]
+    }
+  }
+}

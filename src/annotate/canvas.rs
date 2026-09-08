@@ -142,7 +142,7 @@ enum Drag {
     None,
     Create { id: u64, start: Pt },
     Freehand { id: u64 },
-    Move { ids: Vec<u64>, originals: Vec<Item>, last: Pt },
+    Move { ids: Vec<u64>, originals: Vec<Item>, last: Pt, created: bool },
     Resize { id: u64, handle: usize, orig: RectF },
     Endpoint { id: u64, which: u8 },
     Tail { id: u64 },
@@ -558,7 +558,7 @@ impl Canvas {
         self.area.set_cursor_from_name(Some(name));
     }
 
-    fn begin_drag(&self, x: f64, y: f64, mods: gdk::ModifierType) {
+    pub(crate) fn begin_drag(&self, x: f64, y: f64, mods: gdk::ModifierType) {
         self.commit_text_edit();
         let mut s = self.state.borrow_mut();
         let p = s.to_image(x, y);
@@ -567,9 +567,10 @@ impl Canvas {
             return;
         }
         if let Some(c) = s.crop.clone() {
+            let full = s.doc.image_rect();
             if let Some(h) = crop_handle_at(&s, x, y) {
                 s.drag = Drag::CropResize { handle: h, orig: c.rect };
-            } else if c.rect.contains(p) {
+            } else if c.rect.contains(p) && c.rect.normalized() != full {
                 s.drag = Drag::CropMove { last: p };
             } else {
                 s.drag = Drag::CropCreate { start: p };
@@ -605,7 +606,7 @@ impl Canvas {
                         let ids = s.selection.clone();
                         let originals = s.doc.sheet.items.iter().filter(|i| ids.contains(&i.id)).cloned().collect();
                         s.checkpoint();
-                        s.drag = Drag::Move { ids, originals, last: p };
+                        s.drag = Drag::Move { ids, originals, last: p, created: false };
                     }
                     None => {
                         if !shift {
@@ -633,7 +634,7 @@ impl Canvas {
                 s.doc.sheet.next_counter += 1;
                 let id = s.doc.add(Kind::Counter { center: p, number: n, size: opts.counter_size }, style);
                 s.selection = vec![id];
-                s.drag = Drag::Move { ids: vec![id], originals: vec![s.doc.item(id).cloned().unwrap()], last: p };
+                s.drag = Drag::Move { ids: vec![id], originals: vec![s.doc.item(id).cloned().unwrap()], last: p, created: true };
             }
             Tool::Pencil | Tool::Highlight => {
                 s.checkpoint();
@@ -675,7 +676,7 @@ impl Canvas {
         }
     }
 
-    fn update_drag(&self, x: f64, y: f64, mods: gdk::ModifierType) {
+    pub(crate) fn update_drag(&self, x: f64, y: f64, mods: gdk::ModifierType) {
         let mut s = self.state.borrow_mut();
         let p = s.to_image(x, y);
         let shift = mods.contains(gdk::ModifierType::SHIFT_MASK);
@@ -725,14 +726,14 @@ impl Canvas {
                     }
                 }
             }
-            Drag::Move { ids, originals, last } => {
+            Drag::Move { ids, originals, last, created } => {
                 let (dx, dy) = (p.x - last.x, p.y - last.y);
                 for id in &ids {
                     if let Some(it) = s.doc.item_mut(*id) {
                         it.translate(dx, dy);
                     }
                 }
-                s.drag = Drag::Move { ids, originals, last: p };
+                s.drag = Drag::Move { ids, originals, last: p, created };
             }
             Drag::Resize { id, handle, orig } => {
                 let mut r = resize_rect(orig, handle, p, shift);
@@ -790,8 +791,10 @@ impl Canvas {
             }
             Drag::CropMove { last } => {
                 let (dx, dy) = (p.x - last.x, p.y - last.y);
+                let full = s.doc.image_rect();
                 if let Some(c) = s.crop.as_mut() {
-                    c.rect = c.rect.translate(dx, dy);
+                    let r = c.rect.translate(dx, dy);
+                    c.rect = RectF::new(r.x.clamp(0.0, (full.w - r.w).max(0.0)), r.y.clamp(0.0, (full.h - r.h).max(0.0)), r.w, r.h);
                 }
                 s.drag = Drag::CropMove { last: p };
             }
@@ -815,7 +818,7 @@ impl Canvas {
         self.changed();
     }
 
-    fn end_drag(&self, x: f64, y: f64) {
+    pub(crate) fn end_drag(&self, x: f64, y: f64) {
         let mut s = self.state.borrow_mut();
         let p = s.to_image(x, y);
         let drag = std::mem::replace(&mut s.drag, Drag::None);
@@ -866,10 +869,10 @@ impl Canvas {
                     }
                 }
             }
-            Drag::Move { ids, originals, .. } => {
+            Drag::Move { ids, originals, created, .. } => {
                 // A click without movement should not leave an undo entry.
                 let unchanged = ids.iter().all(|id| s.doc.item(*id) == originals.iter().find(|o| o.id == *id));
-                if unchanged {
+                if unchanged && !created {
                     s.doc.undo();
                 }
             }
@@ -1747,4 +1750,213 @@ fn snap_highlight(lines: &[TextLine], pts: &[Pt]) -> Vec<(f64, f64, f64, f64)> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_frame() -> Frame {
+        let mut img = image::RgbaImage::from_pixel(400, 300, image::Rgba([240, 240, 240, 255]));
+        // A dark block so blur/crop detection has something to find.
+        for y in 100..200 {
+            for x in 100..300 {
+                img.put_pixel(x, y, image::Rgba([20, 30, 40, 255]));
+            }
+        }
+        Frame { image: img, scale: 1.0 }
+    }
+
+    fn canvas() -> Canvas {
+        let _ = gtk::init();
+        let c = Canvas::new(test_frame(), Style::default(), ToolOptions::default());
+        {
+            let mut s = c.state.borrow_mut();
+            s.viewport = (800.0, 600.0);
+            s.zoom = 1.0;
+            s.pan = (0.0, 0.0);
+            s.fitted = true;
+        }
+        c
+    }
+
+    fn drag(c: &Canvas, from: (f64, f64), to: (f64, f64), mods: gdk::ModifierType) {
+        c.begin_drag(from.0, from.1, mods);
+        c.update_drag((from.0 + to.0) / 2.0, (from.1 + to.1) / 2.0, mods);
+        c.update_drag(to.0, to.1, mods);
+        c.end_drag(to.0, to.1);
+    }
+
+    fn items(c: &Canvas) -> Vec<Item> {
+        c.state.borrow().doc.sheet.items.clone()
+    }
+
+    #[test]
+    fn editor_gestures() {
+        let c = canvas();
+        let none = gdk::ModifierType::empty();
+        let shift = gdk::ModifierType::SHIFT_MASK;
+
+        // Rectangle creation, undo, redo.
+        c.set_tool(Tool::Rect);
+        drag(&c, (10.0, 10.0), (100.0, 80.0), none);
+        let it = items(&c);
+        assert_eq!(it.len(), 1);
+        assert!(matches!(it[0].kind, Kind::Rect { rect, filled: false } if rect == RectF::new(10.0, 10.0, 90.0, 70.0)));
+        assert_eq!(c.state.borrow().selection, vec![it[0].id]);
+        c.undo();
+        assert!(items(&c).is_empty());
+        c.redo();
+        assert_eq!(items(&c).len(), 1);
+
+        // A click without dragging creates nothing and leaves no undo entry.
+        let undo_before = c.state.borrow().doc.can_undo();
+        c.begin_drag(200.0, 200.0, none);
+        c.end_drag(200.5, 200.0);
+        assert_eq!(items(&c).len(), 1);
+        assert_eq!(c.state.borrow().doc.can_undo(), undo_before);
+
+        // Shift constrains to a square.
+        drag(&c, (150.0, 150.0), (250.0, 190.0), shift);
+        let sq = items(&c).last().cloned().unwrap();
+        assert!(matches!(sq.kind, Kind::Rect { rect, .. } if (rect.w - rect.h).abs() < 0.01 && rect.w == 100.0));
+        c.undo();
+
+        // Moving with the selection tool (grab the left edge of the rectangle).
+        c.set_tool(Tool::Select);
+        drag(&c, (10.0, 45.0), (30.0, 55.0), none);
+        let moved = items(&c)[0].clone();
+        assert!(matches!(moved.kind, Kind::Rect { rect, .. } if rect.x == 30.0 && rect.y == 20.0), "{:?}", moved.kind);
+
+        // Resize from the bottom-right handle (item is selected after the move).
+        drag(&c, (120.0, 90.0), (160.0, 130.0), none);
+        let resized = items(&c)[0].clone();
+        assert!(matches!(resized.kind, Kind::Rect { rect, .. } if rect.w == 130.0 && rect.h == 110.0), "{:?}", resized.kind);
+
+        // Arrow with 45-degree snapping, then endpoint drag.
+        c.set_tool(Tool::Arrow);
+        drag(&c, (200.0, 200.0), (300.0, 220.0), shift);
+        let arrow = items(&c).last().cloned().unwrap();
+        match arrow.kind {
+            Kind::Arrow { a, b, .. } => {
+                assert_eq!(a, Pt::new(200.0, 200.0));
+                assert!((b.y - 200.0).abs() < 0.01, "snapped to horizontal: {b:?}");
+            }
+            k => panic!("expected arrow, got {k:?}"),
+        }
+        c.set_tool(Tool::Select);
+        c.state.borrow_mut().selection = vec![arrow.id];
+        let bx = match arrow.kind { Kind::Arrow { b, .. } => b, _ => unreachable!() };
+        drag(&c, (bx.x, bx.y), (bx.x, bx.y + 50.0), none);
+        let arrow2 = c.state.borrow().doc.item(arrow.id).cloned().unwrap();
+        assert!(matches!(arrow2.kind, Kind::Arrow { b, .. } if (b.y - (bx.y + 50.0)).abs() < 0.01));
+
+        // Text placement with live editing and commit.
+        c.set_tool(Tool::Text);
+        c.begin_drag(50.0, 250.0, none);
+        assert!(c.is_text_editing());
+        let view = c.state.borrow().text_edit.as_ref().unwrap().view.clone();
+        view.buffer().set_text("hello");
+        c.commit_text_edit();
+        let txt = items(&c).last().cloned().unwrap();
+        assert!(matches!(&txt.kind, Kind::Text { text, .. } if text == "hello"));
+        assert_eq!(c.state.borrow().tool, Tool::Select);
+        // Empty text is discarded.
+        c.set_tool(Tool::Text);
+        let before = items(&c).len();
+        c.begin_drag(60.0, 260.0, none);
+        c.commit_text_edit();
+        assert_eq!(items(&c).len(), before);
+
+        // Counter auto-increments.
+        c.set_tool(Tool::Counter);
+        c.begin_drag(300.0, 50.0, none);
+        c.end_drag(300.0, 50.0);
+        c.begin_drag(330.0, 50.0, none);
+        c.end_drag(330.0, 50.0);
+        let nums: Vec<u32> = items(&c).iter().filter_map(|i| match i.kind { Kind::Counter { number, .. } => Some(number), _ => None }).collect();
+        assert_eq!(nums, vec![1, 2]);
+
+        // Highlighter snaps to detected text lines.
+        c.state.borrow_mut().text_lines = Some(vec![TextLine { y: 120.0, height: 16.0, words: vec![(100.0, 140.0), (150.0, 200.0)] }]);
+        c.set_tool(Tool::Highlight);
+        let before = items(&c).len();
+        drag(&c, (105.0, 118.0), (190.0, 124.0), none);
+        let hl = items(&c).last().cloned().unwrap();
+        assert_eq!(items(&c).len(), before + 1);
+        assert!(matches!(&hl.kind, Kind::Highlight { points } if points.len() == 2 && points[0].x == 98.0 && points[1].x == 202.0 && points[0].y == 120.0), "{:?}", hl.kind);
+
+        // Blur affects the export pixels inside its region only.
+        c.set_tool(Tool::Blur);
+        drag(&c, (100.0, 100.0), (300.0, 200.0), none);
+        let out = c.render_export();
+        assert_eq!((out.width(), out.height()), (400, 300));
+        assert_eq!(out.get_pixel(5, 5)[0], 240, "outside blur untouched");
+
+        // Marquee select everything, delete, undo restores.
+        c.set_tool(Tool::Select);
+        drag(&c, (0.0, 0.0), (399.0, 299.0), none);
+        let n = items(&c).len();
+        assert_eq!(c.state.borrow().selection.len(), n);
+        c.delete_selection();
+        assert!(items(&c).is_empty());
+        c.undo();
+        assert_eq!(items(&c).len(), n);
+
+        // Crop: drag a region, commit, export shrinks; cancel restores.
+        c.set_tool(Tool::Crop);
+        assert!(c.state.borrow().crop.is_some());
+        c.state.borrow_mut().options.crop_snap = false;
+        drag(&c, (50.0, 50.0), (250.0, 150.0), none);
+        c.commit_crop();
+        assert_eq!(c.state.borrow().doc.sheet.crop, Some(RectF::new(50.0, 50.0, 200.0, 100.0)));
+        let out = c.render_export();
+        assert_eq!((out.width(), out.height()), (200, 100));
+        c.set_tool(Tool::Crop);
+        drag(&c, (0.0, 0.0), (399.0, 299.0), none);
+        c.cancel_crop();
+        assert_eq!(c.state.borrow().doc.sheet.crop, Some(RectF::new(50.0, 50.0, 200.0, 100.0)));
+
+        // Auto-crop finds the dark block.
+        c.state.borrow_mut().doc.sheet.crop = None;
+        c.set_tool(Tool::Crop);
+        assert!(c.auto_crop());
+        assert_eq!(c.state.borrow().crop.as_ref().unwrap().rect, RectF::new(100.0, 100.0, 200.0, 100.0));
+        c.cancel_crop();
+
+        // Copy / paste / duplicate.
+        c.set_tool(Tool::Select);
+        c.select_all();
+        let n = items(&c).len();
+        assert!(c.copy_items());
+        c.paste_items();
+        assert_eq!(items(&c).len(), n * 2);
+        c.duplicate();
+        assert_eq!(items(&c).len(), n * 2 + n);
+
+        // Zooming keeps the anchor point stable.
+        {
+            let mut s = c.state.borrow_mut();
+            let before = s.to_image(100.0, 100.0);
+            s.set_zoom(2.0, Some((100.0, 100.0)));
+            let after = s.to_image(100.0, 100.0);
+            assert!((before.x - after.x).abs() < 0.01 && (before.y - after.y).abs() < 0.01);
+        }
+
+        canvas_export_with_background();
+    }
+
+    // GTK may only be initialized from one thread, so this runs inside `editor_gestures`.
+    fn canvas_export_with_background() {
+        let c = canvas();
+        c.update_canvas("bg", |cv| {
+            cv.background = Background::Solid { color: Color::rgba(0.0, 0.0, 1.0, 1.0) };
+            cv.padding = 20.0;
+            cv.corner_radius = 8.0;
+        });
+        let out = c.render_export();
+        assert_eq!((out.width(), out.height()), (440, 340));
+        assert_eq!(out.get_pixel(2, 2)[2], 255, "padding is blue");
+        assert_eq!(out.get_pixel(220, 170)[0], 20, "image content intact");
+    }
 }
