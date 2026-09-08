@@ -1317,7 +1317,7 @@ impl EditorWindow {
         let cfg = self.gb.config.get();
         let existing = self.source.borrow().clone();
         let path = match &existing {
-            Some(p) => match crate::export::save_to(&img, p, cfg.general.quality) {
+            Some(p) => match crate::export::save_to(&img, p, cfg.general.quality, true) {
                 Ok(_) => p.clone(),
                 Err(e) => {
                     self.toast(&format!("Save failed: {e}"));
@@ -1385,7 +1385,7 @@ impl EditorWindow {
             if let Ok(file) = res {
                 if let Some(path) = file.path() {
                     let img = t.canvas.render_export();
-                    match crate::export::save_to(&img, &path, cfg.general.quality) {
+                    match crate::export::save_to(&img, &path, cfg.general.quality, true) {
                         Ok(_) => {
                             let _ = t.gb.history.borrow().insert(&path, img.width(), img.height(), None);
                             t.toast(&format!("Exported {}", path.display()));

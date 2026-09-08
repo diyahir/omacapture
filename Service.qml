@@ -69,7 +69,8 @@ Item {
 
     function edit(path: string): string {
       if (root.checked && !root.installed) return "missing"
-      Util.execDetached(Model.editCommand(path))
+      // argv form: the path never passes through a shell.
+      Util.execArgv([Model.BINARY, "annotate", "--", path])
       return "ok"
     }
 

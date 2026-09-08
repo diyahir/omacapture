@@ -11,6 +11,7 @@ mod paths;
 mod postcapture;
 mod quickaccess;
 mod annotate;
+mod keybinds;
 mod mcp;
 mod theme;
 
@@ -51,12 +52,22 @@ pub enum Command {
     Daemon,
     /// Serve the Model Context Protocol over stdio for AI agents.
     Mcp,
+    /// Install, remove, or inspect the optional Hyprland keybindings.
+    Keybinds {
+        #[command(subcommand)]
+        command: keybinds::KeybindsCommand,
+    },
 }
 
 /// `omashot FILE` opens the editor, so the binary can serve as
 /// `OMARCHY_SCREENSHOT_EDITOR` and as a drag-and-drop target.
 pub fn normalize_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Vec<std::ffi::OsString> {
     let mut v: Vec<std::ffi::OsString> = args.into_iter().collect();
+    // Never reinterpret a valid invocation: `omashot area` stays a capture even
+    // if a file named `area` happens to exist in the working directory.
+    if Cli::try_parse_from(&v).is_ok() {
+        return v;
+    }
     let first_non_flag = v.iter().skip(1).position(|a| !a.to_string_lossy().starts_with('-')).map(|i| i + 1);
     if let Some(i) = first_non_flag {
         if std::path::Path::new(&v[i]).is_file() {
@@ -81,6 +92,15 @@ fn main() -> glib::ExitCode {
                 Ok(()) => glib::ExitCode::SUCCESS,
                 Err(e) => {
                     eprintln!("mcp: {e}");
+                    glib::ExitCode::FAILURE
+                }
+            };
+        }
+        if let Some(Command::Keybinds { command }) = cli.command {
+            return match keybinds::run(command) {
+                Ok(()) => glib::ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("keybinds: {e}");
                     glib::ExitCode::FAILURE
                 }
             };

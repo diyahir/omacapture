@@ -19,10 +19,9 @@
     "category": "Utilities",
     "allowMultiple": false,
     "defaultSection": "right",
-    "defaults": { "clickMode": "area", "showDaemon": true },
+    "defaults": { "clickMode": "area" },
     "schema": [
-      { "key": "clickMode", "type": "string", "label": "Left-click capture mode (area, window, full, annotate, ocr)" },
-      { "key": "showDaemon", "type": "boolean", "label": "Keep the omashot daemon resident for instant captures" }
+      { "key": "clickMode", "type": "string", "label": "Left-click capture mode (area, window, full, annotate, ocr)" }
     ]
   }
 }
