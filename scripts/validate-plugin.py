@@ -69,6 +69,17 @@ for rel in filter(None, tracked):
     if (root / rel).is_symlink():
         fail(f"symlink in tree: {rel}")
 
+# --- documented installs must build the attested lockfile --------------------
+for rel in tracked:
+    if rel.endswith((".md", ".qml", ".rs")) and (root / rel).is_file():
+        try:
+            text = (root / rel).read_text()
+        except UnicodeDecodeError:
+            continue
+        for m in re.finditer(r"cargo\s+install\s+(?!--locked)[^\n]*--path", text):
+            line = text[: m.start()].count("\n") + 1
+            fail(f"{rel}:{line}: cargo install --path must use --locked so users build the reviewed Cargo.lock")
+
 # --- automated security baseline ------------------------------------------
 # The literal patterns are assembled from fragments so the marketplace's own
 # scanner does not flag this file for the capabilities it merely checks for.
