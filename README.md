@@ -48,7 +48,7 @@ omarchy plugin add https://github.com/diyahir/omacapture.git --enable
 #    (gtk4, libadwaita, gtk4-layer-shell, grim, wl-clipboard, tesseract);
 #    only a Rust toolchain is needed.
 omarchy install dev-env rust        # skip if you already have cargo
-cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omacapture
+cargo install --locked --path ~/.config/omarchy/plugins/io.github.diyaclanker.omacapture
 omarchy-shell omacapture recheck
 ```
 
@@ -222,7 +222,7 @@ Resources `omacapture://latest` (the newest capture as PNG) and `omacapture://hi
 
 ```sh
 omarchy plugin update io.github.diyaclanker.omacapture
-cargo install --path ~/.config/omarchy/plugins/io.github.diyaclanker.omacapture
+cargo install --locked --path ~/.config/omarchy/plugins/io.github.diyaclanker.omacapture
 omarchy restart shell        # services load at shell start; bar widgets hot-reload on their own
 ```
 
