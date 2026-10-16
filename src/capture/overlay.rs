@@ -63,6 +63,10 @@ pub fn pick(
     on_done: impl FnOnce(Option<Selection>) + 'static,
 ) {
     let monitors = all_monitors();
+    if monitors.is_empty() {
+        on_done(None);
+        return;
+    }
     let cursor = hypr::cursor_pos().map(|c| (c.x as f64, c.y as f64)).unwrap_or((0.0, 0.0));
     let windows = if hypr::is_hyprland() { hypr::visible_windows().unwrap_or_default() } else { Vec::new() };
 
@@ -91,10 +95,8 @@ pub fn pick(
             }
             Err(e) => {
                 tracing::error!("capture of {name} failed: {e}");
-                let mut s = state.borrow_mut();
-                if let Some(cb) = s.on_done.take() {
-                    cb(None);
-                }
+                state.borrow_mut().views = views;
+                finish(&state, None);
                 return;
             }
         };

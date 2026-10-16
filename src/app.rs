@@ -8,7 +8,7 @@ use crate::{Cli, Command};
 use clap::Parser;
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 pub struct Omacapture {
@@ -19,8 +19,27 @@ pub struct Omacapture {
     pub last_area: RefCell<Option<Rect>>,
     /// `--wait`: print a JSON result line to stdout when the capture completes, then quit.
     pub wait_mode: std::cell::Cell<bool>,
+    capture_active: Rc<Cell<bool>>,
     _config_monitor: RefCell<Option<gio::FileMonitor>>,
     _hold: RefCell<Option<gio::ApplicationHoldGuard>>,
+}
+
+struct CaptureGuard(Rc<Cell<bool>>);
+
+impl CaptureGuard {
+    fn acquire(active: &Rc<Cell<bool>>) -> Option<Self> {
+        if active.replace(true) {
+            None
+        } else {
+            Some(Self(active.clone()))
+        }
+    }
+}
+
+impl Drop for CaptureGuard {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
 }
 
 thread_local! {
@@ -55,6 +74,7 @@ pub fn run() -> glib::ExitCode {
             quick_access: RefCell::new(QuickAccessPanel::new()),
             last_area: RefCell::new(None),
             wait_mode: std::cell::Cell::new(false),
+            capture_active: Rc::new(Cell::new(false)),
             _config_monitor: RefCell::new(config_monitor),
             _hold: RefCell::new(None),
         });
@@ -89,10 +109,19 @@ pub fn dispatch(gb: &Rc<Omacapture>, cmd: Command) {
             *gb._hold.borrow_mut() = Some(gb.app.hold());
             tracing::info!("daemon running");
         }
-        Command::Full => capture_fullscreen(gb),
-        Command::Area { annotate } => capture_area(gb, annotate),
-        Command::Window => capture_window(gb),
-        Command::Ocr => capture_ocr(gb),
+        Command::Full | Command::Area { .. } | Command::Window | Command::Ocr => {
+            let Some(capture) = CaptureGuard::acquire(&gb.capture_active) else {
+                tracing::debug!("capture already active");
+                return;
+            };
+            match cmd {
+                Command::Full => capture_fullscreen(gb, capture),
+                Command::Area { annotate } => capture_area(gb, annotate, capture),
+                Command::Window => capture_window(gb, capture),
+                Command::Ocr => capture_ocr(gb, capture),
+                _ => unreachable!(),
+            }
+        }
         Command::Annotate { file } => crate::annotate::open_file(gb, &file),
         Command::History => crate::history::browser::open(gb),
         Command::Settings => crate::annotate::preferences::open(gb),
@@ -132,9 +161,10 @@ fn with_delay(gb: &Rc<Omacapture>, f: impl FnOnce() + 'static) {
     }
 }
 
-fn capture_fullscreen(gb: &Rc<Omacapture>) {
+fn capture_fullscreen(gb: &Rc<Omacapture>, capture: CaptureGuard) {
     let gb = gb.clone();
     with_delay(&gb.clone(), move || {
+        let _capture = capture;
         let cfg = gb.config.get();
         let monitors = crate::capture::hypr::monitors().unwrap_or_default();
         if monitors.is_empty() {
@@ -158,7 +188,12 @@ fn capture_fullscreen(gb: &Rc<Omacapture>) {
     });
 }
 
-fn start_pick(gb: &Rc<Omacapture>, mode: overlay::PickMode, on_frame: impl FnOnce(&Rc<Omacapture>, Frame, Rect) + 'static) {
+fn start_pick(
+    gb: &Rc<Omacapture>,
+    mode: overlay::PickMode,
+    capture: CaptureGuard,
+    on_frame: impl FnOnce(&Rc<Omacapture>, Frame, Rect) + 'static,
+) {
     let cfg = gb.config.get();
     let remembered = if cfg.general.remember_last_area { *gb.last_area.borrow() } else { None };
     let hold = gb.app.hold();
@@ -172,13 +207,14 @@ fn start_pick(gb: &Rc<Omacapture>, mode: overlay::PickMode, on_frame: impl FnOnc
             None => report_wait_result(&gb2, None, 0, 0),
         }
         drop(hold);
+        drop(capture);
     });
 }
 
-fn capture_area(gb: &Rc<Omacapture>, inline_annotate: bool) {
+fn capture_area(gb: &Rc<Omacapture>, inline_annotate: bool, capture: CaptureGuard) {
     let gb = gb.clone();
     with_delay(&gb.clone(), move || {
-        start_pick(&gb, overlay::PickMode::Region, move |gb, frame, _| {
+        start_pick(&gb, overlay::PickMode::Region, capture, move |gb, frame, _| {
             if inline_annotate {
                 crate::annotate::open(gb, frame, None);
             } else {
@@ -188,18 +224,18 @@ fn capture_area(gb: &Rc<Omacapture>, inline_annotate: bool) {
     });
 }
 
-fn capture_window(gb: &Rc<Omacapture>) {
+fn capture_window(gb: &Rc<Omacapture>, capture: CaptureGuard) {
     let gb = gb.clone();
     with_delay(&gb.clone(), move || {
-        start_pick(&gb, overlay::PickMode::Window, |gb, frame, _| {
+        start_pick(&gb, overlay::PickMode::Window, capture, |gb, frame, _| {
             crate::postcapture::handle(gb, frame, CaptureMode::Window);
         });
     });
 }
 
-fn capture_ocr(gb: &Rc<Omacapture>) {
+fn capture_ocr(gb: &Rc<Omacapture>, capture: CaptureGuard) {
     let gb = gb.clone();
-    start_pick(&gb.clone(), overlay::PickMode::Region, move |gb, frame, _| {
+    start_pick(&gb.clone(), overlay::PickMode::Region, capture, move |gb, frame, _| {
         let cfg = gb.config.get();
         let app = gb.app.clone();
         let png = match crate::export::encode_png(&frame.image) {
@@ -235,4 +271,48 @@ fn capture_ocr(gb: &Rc<Omacapture>) {
             Err(_) => glib::ControlFlow::Break,
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_rejects_overlap_and_retries_after_drop() {
+        let active = Rc::new(Cell::new(false));
+        let capture = CaptureGuard::acquire(&active).unwrap();
+        assert!(CaptureGuard::acquire(&active).is_none());
+        assert!(CaptureGuard::acquire(&active).is_none());
+        drop(capture);
+        assert!(CaptureGuard::acquire(&active).is_some());
+    }
+
+    #[test]
+    fn capture_stays_active_until_completion_callback_returns() {
+        let active = Rc::new(Cell::new(false));
+        let capture = CaptureGuard::acquire(&active).unwrap();
+        let complete = || {
+            assert!(CaptureGuard::acquire(&active).is_none());
+            drop(capture);
+        };
+        assert!(CaptureGuard::acquire(&active).is_none());
+        complete();
+        assert!(CaptureGuard::acquire(&active).is_some());
+    }
+
+    #[test]
+    fn capture_retries_after_error_or_cancelled_callback() {
+        fn fail(active: &Rc<Cell<bool>>) -> Result<(), ()> {
+            let _capture = CaptureGuard::acquire(active).unwrap();
+            Err(())
+        }
+
+        let active = Rc::new(Cell::new(false));
+        assert!(fail(&active).is_err());
+        let capture = CaptureGuard::acquire(&active).unwrap();
+        let cancel = move || drop(capture);
+        assert!(CaptureGuard::acquire(&active).is_none());
+        drop(cancel);
+        assert!(CaptureGuard::acquire(&active).is_some());
+    }
 }
